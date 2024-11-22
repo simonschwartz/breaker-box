@@ -25,6 +25,14 @@ A collection of the circuit breaker pattern implemented in different programming
 
 A circuit breaker automatically detects failures in dependencies of a system. When a dependency is detected as failing, the circuit breaker prevents traffic from being sent to the service, while periodically sampling a small percentage of traffic to verify if the dependent service has recovered. This prevents cascading failures that can be caused by continuing to send traffic to a failing service.
 
+A circuit breaker can help protect systems against:
+- retry storms caused by services that retry failing requests
+- continuing to add load on a service that is exhausted of resources
+
+It also provides other benefits such as:
+- avoiding unnecessary latency by failing fast
+- signalling to dependent services that the service is unavailable so they can respond appropriately
+
 ## Approach
                                                                           
                                                                           
