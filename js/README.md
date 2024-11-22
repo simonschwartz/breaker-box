@@ -1,7 +1,13 @@
 # JavaScript Circuit Breaker
 
 ```js
-const cb = new CircuitBreaker();
+const cb = new CircuitBreaker({
+  minEvalSize: 1000,
+  errorThreshold: 40,
+  retryTimeout: 180000,
+  evalWindow: { minutes: 5, spans: 5 },
+  trialSuccessesRequired: 20,
+});
 
 async function veryImportant() {
   const cState = cb.state;
