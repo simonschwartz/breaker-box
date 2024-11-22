@@ -18,7 +18,7 @@ func VeryImportant() (*CriticalData, error) {
 
         return res, nil
     } else {
-        return nil, errors.New("502: service unavailable")
+        return nil, errors.New("503: Service Unavailable")
     }
 }
 ```
