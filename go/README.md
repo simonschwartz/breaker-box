@@ -1,7 +1,13 @@
 # Go Circuit Breaker
 
 ```go
-cb := circuitbreaker.New()
+cb := circuitbreaker.
+    New().
+    SetEvalWindow(5, 5).
+    SetMinEvalSize(1000).
+    SetErrorThreshold(40.0).
+    SetRetryTimeout(3 * time.Minute).
+    Build()
 
 func VeryImportant() (*CriticalData, error) {
     cState := cb.GetState()
