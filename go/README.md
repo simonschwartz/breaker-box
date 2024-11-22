@@ -6,6 +6,7 @@ cb := circuitbreaker.
     SetEvalWindow(5, 5).
     SetMinEvalSize(1000).
     SetErrorThreshold(40.0).
+    SetTrialSuccessesRequired(20).
     SetRetryTimeout(3 * time.Minute).
     Build()
 

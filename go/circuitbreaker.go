@@ -159,6 +159,11 @@ func (b *Builder) SetRetryTimeout(duration time.Duration) *Builder {
 	return b
 }
 
+func (b *Builder) SetTrialSuccessesRequired(number int) *Builder {
+	b.cb.trialSuccesses = number
+	return b
+}
+
 func (b *Builder) Build() *CircuitBreaker {
 	return b.cb
 }

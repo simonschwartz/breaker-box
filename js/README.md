@@ -2,11 +2,11 @@
 
 ```js
 const cb = new CircuitBreaker({
+  evalWindow: { minutes: 5, spans: 5 },
   minEvalSize: 1000,
   errorThreshold: 40,
-  retryTimeout: 180000,
-  evalWindow: { minutes: 5, spans: 5 },
   trialSuccessesRequired: 20,
+  retryTimeout: 180000,
 });
 
 async function veryImportant() {
