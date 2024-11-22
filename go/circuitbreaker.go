@@ -21,7 +21,7 @@ const (
 	DefaultErrorThreshold = 10.0
 
 	// Default number of consecutive success events required to move HalfOpen circuit to Closed
-	DefaultTrialSuccessesRequired = 10
+	DefaultTrialSuccessesRequired = 20
 
 	// Duration to wait to move Open circuit to HalfOpen
 	DefaultRetryTimeout = time.Minute
@@ -205,7 +205,7 @@ func (cb *CircuitBreaker) Record(result Result) {
 	}
 
 	// If the circuit is HalfOpen, allow a small sample or trial traffic through
-	// If 10 consecutive successes occur, assume the service is OK and set the circuit to Closed
+	// If 20 consecutive successes occur, assume the service is OK and set the circuit to Closed
 	if cb.state == HalfOpen && result == Success {
 		cb.trialSuccesses++
 		if cb.trialSuccesses >= DefaultTrialSuccessesRequired {
@@ -281,46 +281,4 @@ func (cb *CircuitBreaker) GetErrorRate() float64 {
 
 	errorRate := (float64(errors) / float64(count)) * 100
 	return math.Round(errorRate*100) / 100
-}
-
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetTrafficState() []Cursor {
-	var traffic = make([]Cursor, cb.cursor.Len())
-
-	cb.cursor.Do(func(p any) {
-		if c, ok := p.(*Cursor); ok {
-			traffic = append(traffic, *c)
-		} else {
-			traffic = append(traffic, Cursor{
-				Expires:    time.Time{},
-				ErrorCount: 0,
-				TotalCount: 0,
-			})
-		}
-	})
-
-	return traffic
-}
-
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetActiveCursor() Cursor {
-	if c, ok := cb.cursor.Value.(*Cursor); ok {
-		return *c
-	}
-	return Cursor{
-		Expires:    time.Time{},
-		ErrorCount: 0,
-		TotalCount: 0,
-	}
-}
-
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEPrePopulateState(state []Cursor) {
-	cb.clearBuffer()
-
-	current := cb.cursor
-	for i := 0; i < len(state); i++ {
-		current.Value = &state[i]
-		current = current.Next()
-	}
 }

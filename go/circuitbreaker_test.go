@@ -120,7 +120,7 @@ func TestCircuitBreaker(t *testing.T) {
 	state = cb.GetState()
 	assert.Equal(t, circuitbreaker.HalfOpen, state)
 
-	RecordSuccesses(10, cb)
+	RecordSuccesses(20, cb)
 
 	state = cb.GetState()
 	assert.Equal(t, circuitbreaker.Closed, state)
@@ -132,7 +132,6 @@ func BenchmarkCircuitBreakerRecord(b *testing.B) {
 
 	isErrors := make([]bool, b.N)
 	for i := 0; i < b.N; i++ {
-		// #nosec G404 -- Using math/rand is acceptable here as this is just for test purposes
 		isErrors[i] = rand.Float32() < 0.1
 	}
 
