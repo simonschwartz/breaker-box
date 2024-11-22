@@ -69,6 +69,9 @@ type CircuitBreaker struct {
 	// timestamp for when to transition from Open state to HalfOpen
 	retryAfter time.Time
 
+	// how many successive successes required to close a half open circuit
+	trialSuccessesRequired int
+
 	// how many successive successes have occurred while circuit is HalfOpen
 	trialSuccesses int
 }
@@ -159,8 +162,18 @@ func (b *Builder) SetRetryTimeout(duration time.Duration) *Builder {
 	return b
 }
 
+// SetTrialSuccessesRequired configures the number of consecutive successful requests needed
+// while in the Half-Open state before the circuit breaker transitions back to the Closed state.
+//
+// This acts as a confidence threshold - requiring multiple successful requests helps ensure
+// the underlying system has truly recovered before fully restoring traffic.
+//
+// Note: Setting this value too low might result in premature recovery if the system
+// is still unstable. Setting it too high might unnecessarily delay recovery.
+//
+// If not set, the default is 20 successful requests
 func (b *Builder) SetTrialSuccessesRequired(number int) *Builder {
-	b.cb.trialSuccesses = number
+	b.cb.trialSuccessesRequired = number
 	return b
 }
 
@@ -171,13 +184,14 @@ func (b *Builder) Build() *CircuitBreaker {
 func New() *Builder {
 	return &Builder{
 		cb: &CircuitBreaker{
-			state:          Closed,
-			cursor:         ring.New(DefaultEvalWindow + 1),
-			spanDuration:   DefaultSpanDuration,
-			time:           &Time{},
-			minEvalSize:    DefaultMinEvalSize,
-			errorThreshold: DefaultErrorThreshold,
-			retryTimeout:   DefaultRetryTimeout,
+			state:                  Closed,
+			cursor:                 ring.New(DefaultEvalWindow + 1),
+			spanDuration:           DefaultSpanDuration,
+			time:                   &Time{},
+			minEvalSize:            DefaultMinEvalSize,
+			errorThreshold:         DefaultErrorThreshold,
+			trialSuccessesRequired: DefaultTrialSuccessesRequired,
+			retryTimeout:           DefaultRetryTimeout,
 		},
 	}
 }
@@ -213,7 +227,7 @@ func (cb *CircuitBreaker) Record(result Result) {
 	// If 20 consecutive successes occur, assume the service is OK and set the circuit to Closed
 	if cb.state == HalfOpen && result == Success {
 		cb.trialSuccesses++
-		if cb.trialSuccesses >= DefaultTrialSuccessesRequired {
+		if cb.trialSuccesses >= cb.trialSuccessesRequired {
 			cb.state = Closed
 		}
 		return
