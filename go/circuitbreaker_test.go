@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"circuitbreaker"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func RecordErrors(num int, cb *circuitbreaker.CircuitBreaker) {
@@ -32,6 +30,13 @@ type MockTime struct {
 
 func (m *MockTime) Now() time.Time {
 	return m.MockCurrentTime
+}
+
+func assert[T comparable](t *testing.T, actual T, expected T) {
+	t.Helper()
+	if actual != expected {
+		t.Errorf("got %v, want %v", actual, expected)
+	}
 }
 
 func TestCircuitBreaker(t *testing.T) {
@@ -85,8 +90,8 @@ func TestCircuitBreaker(t *testing.T) {
 	rate = cb.GetErrorRate()
 	state = cb.GetState()
 
-	assert.Equal(t, 4.12, rate)
-	assert.Equal(t, circuitbreaker.Closed, state)
+	assert(t, rate, 4.12)
+	assert(t, circuitbreaker.Closed, state)
 
 	// Second - simulate a spike in errors to Open the circuit
 	RecordErrors(250, cb)
@@ -97,33 +102,33 @@ func TestCircuitBreaker(t *testing.T) {
 	rate = cb.GetErrorRate()
 	state = cb.GetState()
 
-	assert.Equal(t, 0.0, rate)
-	assert.Equal(t, circuitbreaker.Open, state)
+	assert(t, 0.0, rate)
+	assert(t, circuitbreaker.Open, state)
 
 	// Third - wait 1 minute for the circuit to move to HalfOpen
 	FastForward(61*time.Second, mockTime)
 	RecordSuccesses(1, cb)
 
 	state = cb.GetState()
-	assert.Equal(t, circuitbreaker.HalfOpen, state)
+	assert(t, circuitbreaker.HalfOpen, state)
 
 	// Fourth - oh no, an error, the circuit goes back to Open
 	RecordErrors(1, cb)
 
 	state = cb.GetState()
-	assert.Equal(t, circuitbreaker.Open, state)
+	assert(t, circuitbreaker.Open, state)
 
 	// Fifth - wait 1 minute for the circuit to move to HalfOpen
 	// Add 1- consecutive values so the circuit closes
 	FastForward(61*time.Second, mockTime)
 	// need to do this to get the state to update
 	state = cb.GetState()
-	assert.Equal(t, circuitbreaker.HalfOpen, state)
+	assert(t, circuitbreaker.HalfOpen, state)
 
 	RecordSuccesses(20, cb)
 
 	state = cb.GetState()
-	assert.Equal(t, circuitbreaker.Closed, state)
+	assert(t, circuitbreaker.Closed, state)
 }
 
 // Benchmarks - go test src/pkg/circuitbreaker/circuitbreaker_test.go -bench=BenchmarkCircuitBreakerRecord -benchtime=5s
