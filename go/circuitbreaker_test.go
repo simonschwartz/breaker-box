@@ -150,3 +150,13 @@ func BenchmarkCircuitBreakerRecord(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkCircuitGetState(b *testing.B) {
+	cb := circuitbreaker.New().Build()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		cb.GetState()
+	}
+}
