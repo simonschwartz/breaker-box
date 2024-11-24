@@ -257,23 +257,25 @@ class CircuitBreaker {
         errorCount: 0,
         totalCount: 0,
       };
+
+      // If the error rate exceeds the threshold, set the circuit breaker to Open
+      const errorRate = this.errorRate;
+      if (
+        this.#state === CircuitBreaker.State.Closed &&
+        errorRate > this.#errorThreshold
+      ) {
+        this.#state = CircuitBreaker.State.Open;
+        this.#retryAfter = this.#date.now() + this.#retryTimeout;
+        this.clearBuffer();
+      }
     }
 
-    if (result === CircuitBreaker.Result.Failure) {
-      this.#ring.cursor.value.errorCount++;
-    }
-
-    this.#ring.cursor.value.totalCount++;
-
-    // If the error rate exceeds the threshold, set the circuit breaker to Open
-    const errorRate = this.errorRate;
-    if (
-      this.#state === CircuitBreaker.State.Closed &&
-      errorRate > this.#errorThreshold
-    ) {
-      this.#state = CircuitBreaker.State.Open;
-      this.#retryAfter = this.#date.now() + this.#retryTimeout;
-      this.clearBuffer();
+    if (this.#ring.cursor.value) {
+      if (result === CircuitBreaker.Result.Failure) {
+        this.#ring.cursor.value.errorCount++;
+      }
+  
+      this.#ring.cursor.value.totalCount++;
     }
   }
 
