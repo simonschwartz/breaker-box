@@ -257,20 +257,22 @@ func (cb *CircuitBreaker) Record(result Result) {
 			ErrorCount: 0,
 			TotalCount: 0,
 		}
+
+		// If the error rate exceeds the threshold, set the circuit breaker to Open
+		errorRate := cb.GetErrorRate()
+		if cb.state == Closed && errorRate > cb.errorThreshold {
+			cb.state = Open
+			cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
+			cb.clearBuffer()
+		}
 	}
 
-	if result == Failure {
-		cb.cursor.Value.(*Cursor).ErrorCount++
-	}
+	if cb.cursor.Value != nil {
+		if result == Failure && cb.cursor.Value != nil {
+			cb.cursor.Value.(*Cursor).ErrorCount++
+		}
 
-	cb.cursor.Value.(*Cursor).TotalCount++
-
-	// If the error rate exceeds the threshold, set the circuit breaker to Open
-	errorRate := cb.GetErrorRate()
-	if cb.state == Closed && errorRate > cb.errorThreshold {
-		cb.state = Open
-		cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
-		cb.clearBuffer()
+		cb.cursor.Value.(*Cursor).TotalCount++
 	}
 }
 
