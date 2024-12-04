@@ -1,5 +1,5 @@
-import { CircuitBreaker as TSCircuitBreaker } from "./circuitbreaker";
-import { CircuitBreaker as JSCircuitBreaker } from "./circuitbreaker.js";
+import { CircuitBreaker as TSCircuitBreaker } from "../src/circuitbreaker";
+import { CircuitBreaker as JSCircuitBreaker } from "../../javascript/src/circuitbreaker.js";
 import { strictEqual } from "node:assert/strict";
 class MockDate {
   currentTime;

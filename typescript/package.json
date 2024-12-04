@@ -1,17 +1,15 @@
 {
-  "name": "circuit-breaker",
+  "name": "circuit-breaker-ts",
   "version": "1.0.0",
   "description": "Automatically detect and respond to failures in dependencies of a system",
   "main": "circuitbreaker.ts",
   "scripts": {
-    "test": "ts-node circuitbreaker.test.ts",
-    "benchmark": "node ./circuitbreaker.benchmark.js"
+    "test": "ts-node ./tests/circuitbreaker.test.ts"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^22.9.1",
-    "benchmark": "^2.1.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3"
   }
