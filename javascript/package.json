@@ -1,0 +1,14 @@
+{
+  "name": "circuit-breaker-js",
+  "version": "1.0.0",
+  "description": "Automatically detect and respond to failures in dependencies of a system",
+  "main": "src/circuitbreaker.js",
+  "scripts": {
+    "benchmark": "node ./tests/circuitbreaker.benchmark.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "benchmark": "^2.1.4"
+  }
+}
