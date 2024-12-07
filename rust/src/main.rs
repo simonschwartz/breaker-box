@@ -1,5 +1,6 @@
-mod circuitbreaker;
+mod circuit_breaker;
+mod ring_buffer;
 
 fn main() {
-	unimplemented!("TODO: parse CLI, throw it all together");
+	todo!("TODO: parse CLI, throw it all together");
 }
