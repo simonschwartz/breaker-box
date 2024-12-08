@@ -1,22 +1,17 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::ring_buffer::RingBuffer;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
 	Closed,
-	Open,
-	HalfOpen,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Input {
-	Success,
-	Failure,
+	Open(Instant),
+	HalfOpen(),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Settings {
+struct Settings {
+	buffer_size: usize,
 	min_eval_size: usize,
 	error_threshold: f32,
 	retry_timeout: Duration,
@@ -27,6 +22,7 @@ pub struct Settings {
 impl Default for Settings {
 	fn default() -> Self {
 		Self {
+			buffer_size: 5,
 			min_eval_size: 100,
 			error_threshold: 10.0,
 			retry_timeout: Duration::from_millis(60000),
@@ -47,7 +43,7 @@ pub struct CircuitBreaker {
 impl CircuitBreaker {
 	pub fn new() -> Self {
 		Self {
-			buffer: RingBuffer::new(5),
+			buffer: RingBuffer::new(Settings::default().buffer_size),
 			state: State::Closed,
 			trial_success: 0,
 			settings: Settings::default(),
@@ -55,6 +51,7 @@ impl CircuitBreaker {
 	}
 
 	pub fn set_buffer_size(mut self, size: usize) -> Self {
+		self.settings.buffer_size = size;
 		self.buffer = RingBuffer::new(size);
 		self
 	}
@@ -83,6 +80,47 @@ impl CircuitBreaker {
 		self.settings.trial_success_required = amount;
 		self
 	}
+
+	pub fn get_state(mut self) -> State {
+		if let State::Open(timeout) = self.state {
+			if timeout.elapsed() >= self.settings.retry_timeout {
+				self.state = State::HalfOpen();
+			}
+		}
+
+		self.state
+	}
+
+	pub fn clear_buffer(mut self) {
+		self.buffer = RingBuffer::new(self.settings.buffer_size)
+	}
+
+	pub fn record<T, E>(mut self, input: Result<T, E>) {
+		if let State::Open(_) = self.state {
+			return;
+		}
+
+		// TODO: half open state isn't being recorded at all?
+		if let State::HalfOpen() = self.state {
+			if input.is_ok() {
+				self.trial_success += 1;
+
+				if self.trial_success >= self.settings.trial_success_required {
+					self.state = State::Closed;
+				}
+				return;
+			} else {
+				self.state = State::Open(Instant::now());
+				self.trial_success = 0;
+				return;
+			}
+		}
+
+		if self.buffer.has_exired(self.settings.buffer_span_duration) {
+			self.buffer.next();
+			// TODO: check error rate
+		}
+	}
 }
 
 impl Default for CircuitBreaker {
@@ -102,6 +140,7 @@ mod test {
 		assert_eq!(CircuitBreaker::new().set_buffer_size(10).buffer.get_length(), 10);
 		assert_eq!(
 			CircuitBreaker::new()
+				.set_buffer_size(666)
 				.set_min_eval_size(5)
 				.set_error_threshold(99.99)
 				.set_retry_timeout(Duration::from_millis(20))
@@ -109,6 +148,7 @@ mod test {
 				.set_trial_success_required(42)
 				.settings,
 			Settings {
+				buffer_size: 666,
 				min_eval_size: 5,
 				error_threshold: 99.99,
 				retry_timeout: Duration::from_millis(20),

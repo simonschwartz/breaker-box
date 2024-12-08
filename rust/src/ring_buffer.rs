@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Node {
@@ -58,6 +58,10 @@ impl RingBuffer {
 
 	pub fn add_success(&mut self) {
 		self.nodes[self.cursor].total_count += 1;
+	}
+
+	pub fn has_exired(&self, timeout: Duration) -> bool {
+		self.nodes[self.cursor].expires.elapsed() >= timeout
 	}
 
 	pub fn next(&mut self) {
