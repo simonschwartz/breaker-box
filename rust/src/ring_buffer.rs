@@ -47,8 +47,12 @@ impl RingBuffer {
 		self.nodes.len()
 	}
 
-	pub fn get_cursor(&self) -> &Node {
+	pub fn get_cursor_node(&self) -> &Node {
 		&self.nodes[self.cursor]
+	}
+
+	pub fn get_cursor(&self) -> usize {
+		self.cursor
 	}
 
 	pub fn add_failure(&mut self) {
@@ -71,6 +75,28 @@ impl RingBuffer {
 			self.cursor += 1;
 		}
 		self.nodes[self.cursor].reset();
+	}
+
+	pub fn get_error_rate(&self, min_eval_size: usize) -> f32 {
+		let mut errors = 0;
+		let mut count = 0;
+
+		for (i, node) in self.nodes.iter().enumerate() {
+			if i == self.cursor {
+				continue;
+			}
+
+			if node.total_count != 0 {
+				errors += node.failure_count;
+				count += node.total_count;
+			}
+		}
+
+		if count < min_eval_size || count == 0 {
+			0.0
+		} else {
+			((errors as f32 / count as f32) * 10_000.0).round() / 100.0
+		}
 	}
 }
 
@@ -97,29 +123,29 @@ mod test {
 	}
 
 	#[test]
-	fn get_cursor_test() {
-		assert_eq!(RingBuffer::new(1).get_cursor().failure_count, 0);
-		assert_eq!(RingBuffer::new(1).get_cursor().total_count, 0);
+	fn get_cursor_node_test() {
+		assert_eq!(RingBuffer::new(1).get_cursor_node().failure_count, 0);
+		assert_eq!(RingBuffer::new(1).get_cursor_node().total_count, 0);
 	}
 
 	#[test]
 	fn add_result_test() {
 		let mut buffer = RingBuffer::new(1);
 
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 0);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 0);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor().failure_count, 1);
-		assert_eq!(buffer.get_cursor().total_count, 1);
+		assert_eq!(buffer.get_cursor_node().failure_count, 1);
+		assert_eq!(buffer.get_cursor_node().total_count, 1);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor().failure_count, 1);
-		assert_eq!(buffer.get_cursor().total_count, 2);
+		assert_eq!(buffer.get_cursor_node().failure_count, 1);
+		assert_eq!(buffer.get_cursor_node().total_count, 2);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor().failure_count, 1);
-		assert_eq!(buffer.get_cursor().total_count, 3);
+		assert_eq!(buffer.get_cursor_node().failure_count, 1);
+		assert_eq!(buffer.get_cursor_node().total_count, 3);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor().failure_count, 2);
-		assert_eq!(buffer.get_cursor().total_count, 4);
+		assert_eq!(buffer.get_cursor_node().failure_count, 2);
+		assert_eq!(buffer.get_cursor_node().total_count, 4);
 	}
 
 	#[test]
@@ -153,34 +179,34 @@ mod test {
 	fn next_add_result_test() {
 		let mut buffer = RingBuffer::new(3);
 		assert_eq!(buffer.cursor, 0);
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 0);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 0);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor().failure_count, 1);
-		assert_eq!(buffer.get_cursor().total_count, 1);
+		assert_eq!(buffer.get_cursor_node().failure_count, 1);
+		assert_eq!(buffer.get_cursor_node().total_count, 1);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor().failure_count, 2);
-		assert_eq!(buffer.get_cursor().total_count, 2);
+		assert_eq!(buffer.get_cursor_node().failure_count, 2);
+		assert_eq!(buffer.get_cursor_node().total_count, 2);
 		buffer.next();
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 0);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 0);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 1);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 1);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 2);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 2);
 		buffer.next();
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 0);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 0);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 1);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 1);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor().failure_count, 1);
-		assert_eq!(buffer.get_cursor().total_count, 2);
+		assert_eq!(buffer.get_cursor_node().failure_count, 1);
+		assert_eq!(buffer.get_cursor_node().total_count, 2);
 		buffer.next();
-		assert_eq!(buffer.get_cursor().failure_count, 0);
-		assert_eq!(buffer.get_cursor().total_count, 0);
+		assert_eq!(buffer.get_cursor_node().failure_count, 0);
+		assert_eq!(buffer.get_cursor_node().total_count, 0);
 	}
 }

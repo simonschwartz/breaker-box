@@ -6,7 +6,7 @@ use crate::ring_buffer::RingBuffer;
 pub enum State {
 	Closed,
 	Open(Instant),
-	HalfOpen(),
+	HalfOpen,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -81,17 +81,17 @@ impl CircuitBreaker {
 		self
 	}
 
-	pub fn get_state(mut self) -> State {
+	fn get_state(mut self) -> State {
 		if let State::Open(timeout) = self.state {
 			if timeout.elapsed() >= self.settings.retry_timeout {
-				self.state = State::HalfOpen();
+				self.state = State::HalfOpen;
 			}
 		}
 
 		self.state
 	}
 
-	pub fn clear_buffer(mut self) {
+	fn clear_buffer(mut self) {
 		self.buffer = RingBuffer::new(self.settings.buffer_size)
 	}
 
@@ -100,8 +100,7 @@ impl CircuitBreaker {
 			return;
 		}
 
-		// TODO: half open state isn't being recorded at all?
-		if let State::HalfOpen() = self.state {
+		if let State::HalfOpen = self.state {
 			if input.is_ok() {
 				self.trial_success += 1;
 
@@ -118,7 +117,16 @@ impl CircuitBreaker {
 
 		if self.buffer.has_exired(self.settings.buffer_span_duration) {
 			self.buffer.next();
-			// TODO: check error rate
+			let error_rate = self.buffer.get_error_rate(self.settings.min_eval_size);
+			if self.state == State::Closed && error_rate > self.settings.error_threshold {
+				self.state = State::Open(Instant::now());
+			}
+		}
+
+		if input.is_ok() {
+			self.buffer.add_success();
+		} else {
+			self.buffer.add_failure();
 		}
 	}
 }
