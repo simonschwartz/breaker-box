@@ -91,10 +91,6 @@ impl CircuitBreaker {
 		self.state
 	}
 
-	fn clear_buffer(mut self) {
-		self.buffer = RingBuffer::new(self.settings.buffer_size)
-	}
-
 	pub fn record<T, E>(mut self, input: Result<T, E>) {
 		if let State::Open(_) = self.state {
 			return;
@@ -120,6 +116,7 @@ impl CircuitBreaker {
 			let error_rate = self.buffer.get_error_rate(self.settings.min_eval_size);
 			if self.state == State::Closed && error_rate > self.settings.error_threshold {
 				self.state = State::Open(Instant::now());
+				self.buffer = RingBuffer::new(self.settings.buffer_size);
 			}
 		}
 
