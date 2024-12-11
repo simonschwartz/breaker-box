@@ -50,38 +50,38 @@ impl CircuitBreaker {
 		}
 	}
 
-	pub fn set_buffer_size(mut self, size: usize) -> Self {
+	pub fn set_buffer_size(&mut self, size: usize) -> &mut Self {
 		self.settings.buffer_size = size;
 		self.buffer = RingBuffer::new(size);
 		self
 	}
 
-	pub fn set_min_eval_size(mut self, size: usize) -> Self {
+	pub fn set_min_eval_size(&mut self, size: usize) -> &mut Self {
 		self.settings.min_eval_size = size;
 		self
 	}
 
-	pub fn set_error_threshold(mut self, threshold: f32) -> Self {
+	pub fn set_error_threshold(&mut self, threshold: f32) -> &mut Self {
 		self.settings.error_threshold = threshold;
 		self
 	}
 
-	pub fn set_retry_timeout(mut self, timeout: Duration) -> Self {
+	pub fn set_retry_timeout(&mut self, timeout: Duration) -> &mut Self {
 		self.settings.retry_timeout = timeout;
 		self
 	}
 
-	pub fn set_buffer_span_duration(mut self, duration: Duration) -> Self {
+	pub fn set_buffer_span_duration(&mut self, duration: Duration) -> &mut Self {
 		self.settings.buffer_span_duration = duration;
 		self
 	}
 
-	pub fn set_trial_success_required(mut self, amount: usize) -> Self {
+	pub fn set_trial_success_required(&mut self, amount: usize) -> &mut Self {
 		self.settings.trial_success_required = amount;
 		self
 	}
 
-	fn get_state(mut self) -> State {
+	pub fn get_state(&mut self) -> State {
 		if let State::Open(timeout) = self.state {
 			if timeout.elapsed() >= self.settings.retry_timeout {
 				self.state = State::HalfOpen;
@@ -91,7 +91,7 @@ impl CircuitBreaker {
 		self.state
 	}
 
-	pub fn record<T, E>(mut self, input: Result<T, E>) {
+	pub fn record<T, E>(&mut self, input: Result<T, E>) {
 		if let State::Open(_) = self.state {
 			return;
 		}
