@@ -10,13 +10,13 @@ pub enum State {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Settings {
-	buffer_size: usize,
-	min_eval_size: usize,
-	error_threshold: f32,
-	retry_timeout: Duration,
-	buffer_span_duration: Duration,
-	trial_success_required: usize,
+pub struct Settings {
+	pub buffer_size: usize,
+	pub min_eval_size: usize,
+	pub error_threshold: f32,
+	pub retry_timeout: Duration,
+	pub buffer_span_duration: Duration,
+	pub trial_success_required: usize,
 }
 
 impl Default for Settings {
@@ -41,12 +41,12 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-	pub fn new() -> Self {
+	pub fn new(settings: Settings) -> Self {
 		Self {
 			buffer: RingBuffer::new(Settings::default().buffer_size),
 			state: State::Closed,
 			trial_success: 0,
-			settings: Settings::default(),
+			settings,
 		}
 	}
 
@@ -130,7 +130,7 @@ impl CircuitBreaker {
 
 impl Default for CircuitBreaker {
 	fn default() -> Self {
-		Self::new()
+		Self::new(Settings::default())
 	}
 }
 
@@ -140,11 +140,11 @@ mod test {
 
 	#[test]
 	fn settings_test() {
-		assert_eq!(CircuitBreaker::new().buffer.get_length(), 5);
-		assert_eq!(CircuitBreaker::new().settings, Settings::default());
-		assert_eq!(CircuitBreaker::new().set_buffer_size(10).buffer.get_length(), 10);
+		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_length(), 5);
+		assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
+		assert_eq!(CircuitBreaker::new(Settings::default()).set_buffer_size(10).buffer.get_length(), 10);
 		assert_eq!(
-			CircuitBreaker::new()
+			CircuitBreaker::new(Settings::default())
 				.set_buffer_size(666)
 				.set_min_eval_size(5)
 				.set_error_threshold(99.99)
