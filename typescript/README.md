@@ -1,4 +1,4 @@
-# JavaScript Circuit Breaker
+# Typescript Circuit Breaker
 
 ```js
 const cb = new CircuitBreaker({
