@@ -1,6 +1,8 @@
 mod circuit_breaker;
-mod cli;
+mod cli_args;
+mod cli_helpers;
 mod ring_buffer;
+mod visualizer;
 
 use std::env;
 
@@ -8,7 +10,7 @@ fn main() {
 	let args: Vec<String> = env::args().skip(1).collect();
 
 	if args.contains(&String::from("-h")) || args.contains(&String::from("--help")) {
-		cli::help();
+		cli_helpers::help();
 		return;
 	}
 
@@ -20,6 +22,6 @@ fn main() {
 		return;
 	}
 
-	let settings = cli::parse_args(args);
+	let settings = cli_args::parse_args(args);
 	let _ = circuit_breaker::CircuitBreaker::new(settings);
 }
