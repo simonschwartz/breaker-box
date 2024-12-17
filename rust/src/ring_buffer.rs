@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Node {
 	expires: Instant,
 	failure_count: usize,
@@ -29,7 +29,13 @@ impl Default for Node {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
+pub struct NodeInfo {
+	pub failure_count: usize,
+	pub total_count: usize,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct RingBuffer {
 	cursor: usize,
 	nodes: Vec<Node>,
@@ -96,6 +102,13 @@ impl RingBuffer {
 			0.0
 		} else {
 			((errors as f32 / count as f32) * 10_000.0).round() / 100.0
+		}
+	}
+
+	pub fn get_node_info(&self, index: usize) -> NodeInfo {
+		NodeInfo {
+			failure_count: self.nodes[index].failure_count,
+			total_count: self.nodes[index].total_count,
 		}
 	}
 }

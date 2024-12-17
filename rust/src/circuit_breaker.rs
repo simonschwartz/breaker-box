@@ -126,6 +126,10 @@ impl CircuitBreaker {
 			self.buffer.add_failure();
 		}
 	}
+
+	pub fn get_buffer(&self) -> &RingBuffer {
+		&self.buffer
+	}
 }
 
 impl Default for CircuitBreaker {

@@ -23,5 +23,8 @@ fn main() {
 	}
 
 	let settings = cli_args::parse_args(args);
-	let _ = circuit_breaker::CircuitBreaker::new(settings);
+	let cb = circuit_breaker::CircuitBreaker::new(settings);
+
+	let vis = visualizer::Visualizer::new(cb.get_buffer());
+	println!("{}", vis.render());
 }
