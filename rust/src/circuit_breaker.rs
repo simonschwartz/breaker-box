@@ -43,7 +43,7 @@ pub struct CircuitBreaker {
 impl CircuitBreaker {
 	pub fn new(settings: Settings) -> Self {
 		Self {
-			buffer: RingBuffer::new(Settings::default().buffer_size),
+			buffer: RingBuffer::new(settings.buffer_size),
 			state: State::Closed,
 			trial_success: 0,
 			settings,

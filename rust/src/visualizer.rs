@@ -118,15 +118,44 @@ impl<'a> Visualizer<'a> {
 	}
 
 	pub fn render(&self) -> String {
-		let mut output = [String::new(), String::new(), String::new()];
+		let mut top = [String::new(), String::new(), String::new()];
+		let mut middle = [String::new(), String::new(), String::new()];
+		let mut bottom = [String::new(), String::new(), String::new()];
 
-		for index in 0..self.buffer.get_length() {
-			output[0].push_str(&self.render_top(index));
-			output[1].push_str(&self.render_middle(index));
-			output[2].push_str(&self.render_bottom(index));
+		for index in 0..self.top.len() {
+			top[0].push_str(&self.render_top(index));
+			top[1].push_str(&self.render_middle(index));
+			top[2].push_str(&self.render_bottom(index));
+			if index < self.top.len() - 1 {
+				top[0].push_str("  ");
+				top[1].push_str("─▶");
+				top[2].push_str("  ");
+			}
 		}
 
-		output.join("\n")
+		if self.top.len() < 3 {
+			let repetition = 3 - self.top.len();
+			top[0].push_str(&"                   ".repeat(repetition));
+
+			match repetition {
+				1 => {
+					top[1].push_str("──────────────────┐");
+					top[2].push_str("                  │");
+				},
+				2 => {
+					top[1].push_str("─────────────────────────────────────┐");
+					top[2].push_str("                                     │");
+				},
+				_ => unreachable!(
+					"The number has to be between 1 and 2 due to the if condition and the panic at 0 in the new method"
+				),
+			}
+		}
+
+		let mut output = top.join("\n");
+		output.push_str(&middle.join("\n"));
+		output.push_str(&bottom.join("\n"));
+		output
 	}
 }
 
