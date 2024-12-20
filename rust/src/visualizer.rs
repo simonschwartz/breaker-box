@@ -122,6 +122,7 @@ impl<'a> Visualizer<'a> {
 		let mut middle = [String::new(), String::new(), String::new()];
 		let mut bottom = [String::new(), String::new(), String::new()];
 
+		// TOP
 		for index in 0..self.top.len() {
 			top[0].push_str(&self.render_top(index));
 			top[1].push_str(&self.render_middle(index));
@@ -151,6 +152,12 @@ impl<'a> Visualizer<'a> {
 				),
 			}
 		}
+
+		// MIDDLE
+		// todo!("Generate the middle buffer boxes");
+
+		// BOTTOM
+		// todo!("Generate the bottom buffer boxes");
 
 		let mut output = top.join("\n");
 		output.push_str(&middle.join("\n"));
