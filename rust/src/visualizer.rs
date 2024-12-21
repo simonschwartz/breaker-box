@@ -157,7 +157,39 @@ impl<'a> Visualizer<'a> {
 		// todo!("Generate the middle buffer boxes");
 
 		// BOTTOM
-		// todo!("Generate the bottom buffer boxes");
+		match &self.bottom {
+			None => {},
+			Some(b) => {
+				if b.len() < 3 {
+					let repetition = 3 - b.len();
+					bottom[2].push_str(&"                     ".repeat(repetition));
+
+					match repetition {
+						0 => {},
+						1 => {
+							bottom[0].push_str("│                    ");
+							bottom[1].push_str("└────────────────────");
+						},
+						2 => {
+							bottom[0].push_str("│                                         ");
+							bottom[1].push_str("└─────────────────────────────────────────");
+						},
+						_ => unreachable!("The number has to be between 0 and 2 due to the if condition"),
+					}
+				}
+
+				for index in 0..b.len() {
+					bottom[0].push_str(&self.render_top(self.buffer.get_length() - 3 + index));
+					bottom[1].push_str(&self.render_middle(self.buffer.get_length() - 3 + index));
+					bottom[2].push_str(&self.render_bottom(self.buffer.get_length() - 3 + index));
+					if index < b.len() - 1 {
+						bottom[0].push_str("  ");
+						bottom[1].push_str("◀─");
+						bottom[2].push_str("  ");
+					}
+				}
+			},
+		}
 
 		let mut output = top.join("\n");
 		output.push_str(&middle.join("\n"));
