@@ -1,22 +1,17 @@
-use crate::ring_buffer::{NodeInfo, RingBuffer};
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Buffer {
-	Index(usize),
-}
+use crate::ring_buffer::RingBuffer;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MiddleBuffer {
-	One(Buffer),
-	Two(Buffer, Buffer),
+	One(usize),
+	Two(usize, usize),
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Visualizer<'a> {
 	buffer: &'a RingBuffer,
-	top: Vec<Buffer>,
+	top: Vec<usize>,
 	middle: Option<Vec<MiddleBuffer>>,
-	bottom: Option<Vec<Buffer>>,
+	bottom: Option<Vec<usize>>,
 }
 
 impl<'a> Visualizer<'a> {
@@ -25,62 +20,74 @@ impl<'a> Visualizer<'a> {
 			0 => panic!("Must have at least one buffer enabled"),
 			1 => Self {
 				buffer,
-				top: vec![Buffer::Index(0)],
+				top: vec![0],
 				middle: None,
 				bottom: None,
 			},
 			2 => Self {
 				buffer,
-				top: vec![Buffer::Index(0), Buffer::Index(1)],
+				top: vec![0, 1],
 				middle: None,
 				bottom: None,
 			},
 			3 => Self {
 				buffer,
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
+				top: vec![0, 1, 2],
 				middle: None,
 				bottom: None,
 			},
 			4 => Self {
 				buffer,
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
+				top: vec![0, 1, 2],
 				middle: None,
-				bottom: Some(vec![Buffer::Index(3)]),
+				bottom: Some(vec![3]),
 			},
 			5 => Self {
 				buffer,
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
+				top: vec![0, 1, 2],
 				middle: None,
-				bottom: Some(vec![Buffer::Index(3), Buffer::Index(4)]),
+				bottom: Some(vec![4, 3]),
 			},
 			6 => Self {
 				buffer,
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
+				top: vec![0, 1, 2],
 				middle: None,
-				bottom: Some(vec![Buffer::Index(3), Buffer::Index(4), Buffer::Index(5)]),
+				bottom: Some(vec![5, 4, 3]),
 			},
 			length => {
-				let n = (length - 7) / 2;
-				let mut middle = Vec::new();
-				for index in (0..n).step_by(2) {
-					middle.push(MiddleBuffer::Two(Buffer::Index(index), Buffer::Index(index + 1)));
+				let offset = (length - 7) / 2; // safe because we are in a match with length > 6
+				let largest = 6 + offset;
+				let bottom = vec![largest, largest - 1, largest - 2];
+
+				let mut asc = Vec::with_capacity(length - 3); // safe because we are in a match with length > 6
+				for i in 3..length {
+					if !bottom.contains(&i) {
+						asc.push(i);
+					}
 				}
-				let rest = length - n - 6;
-				middle.push(if length % 2 == 0 {
-					MiddleBuffer::Two(Buffer::Index(rest), Buffer::Index(rest + 1))
-				} else {
-					MiddleBuffer::One(Buffer::Index(rest))
-				});
+
+				let mut middle_buffers = Vec::with_capacity(asc.len() / 2 + 1);
+				let mut small = 0;
+				let mut large = asc.len() - 1; // safe because we are in a match with length > 6
+
+				while small <= large {
+					let large_val = asc[large];
+					if small == large {
+						middle_buffers.push(MiddleBuffer::One(large_val));
+						break;
+					} else {
+						let small_val = asc[small];
+						middle_buffers.push(MiddleBuffer::Two(large_val, small_val));
+						small += 1;
+						large -= 1;
+					}
+				}
 
 				Self {
 					buffer,
-					top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-					middle: Some(middle),
-					bottom: Some(vec![
-						Buffer::Index(length - 2),
-						Buffer::Index(length - 1),
-						Buffer::Index(length),
-					]),
+					top: vec![0, 1, 2],
+					middle: Some(middle_buffers),
+					bottom: Some(bottom),
 				}
 			},
 		}
@@ -119,7 +126,7 @@ impl<'a> Visualizer<'a> {
 
 	pub fn render(&self) -> String {
 		let mut top = [String::new(), String::new(), String::new()];
-		let mut middle = [String::new(), String::new(), String::new()];
+		let mut middle = vec![String::new(), String::new()];
 		let mut bottom = [String::new(), String::new(), String::new()];
 
 		// TOP
@@ -136,16 +143,14 @@ impl<'a> Visualizer<'a> {
 
 		if self.top.len() < 3 {
 			let repetition = 3 - self.top.len();
-			top[0].push_str(&"                   ".repeat(repetition));
-
 			match repetition {
 				1 => {
-					top[1].push_str("──────────────────┐");
-					top[2].push_str("                  │");
+					top[1].push_str("───────────┐");
+					top[2].push_str("           │");
 				},
 				2 => {
-					top[1].push_str("─────────────────────────────────────┐");
-					top[2].push_str("                                     │");
+					top[1].push_str("────────────────────────────────┐");
+					top[2].push_str("                                │");
 				},
 				_ => unreachable!(
 					"The number has to be between 1 and 2 due to the if condition and the panic at 0 in the new method"
@@ -154,7 +159,64 @@ impl<'a> Visualizer<'a> {
 		}
 
 		// MIDDLE
-		// todo!("Generate the middle buffer boxes");
+		match &self.middle {
+			None => {
+				if self.bottom.is_some() {
+					middle[0].push_str("         ▲                                         │");
+					middle[1].push_str("         │                                         ▼");
+				} else {
+					middle[0].push_str("         ▲                                         │");
+					middle[1].push_str("         └─────────────────────────────────────────┘");
+				}
+			},
+			Some(nodes) => {
+				middle[0].push_str("         ▲                                         │");
+				middle[1].push_str("         │                                         ▼");
+				let mut i = 1;
+				for node in nodes {
+					middle.extend([
+						String::new(),
+						String::new(),
+						String::new(),
+						String::new(),
+						String::new(),
+					]);
+					match node {
+						MiddleBuffer::One(index1) => {
+							middle[i + 1]
+								.push_str(&format!("         │                                {}", self.render_top(*index1)));
+							middle[i + 2]
+								.push_str(&format!("         │                                {}", self.render_middle(*index1)));
+							middle[i + 3]
+								.push_str(&format!("         │                                {}", self.render_bottom(*index1)));
+							middle[i + 4].push_str("         │                                         │");
+							middle[i + 5].push_str("         │                                         ▼");
+							i += 5;
+						},
+						MiddleBuffer::Two(index1, index2) => {
+							middle[i + 1].push_str(&format!(
+								"{}                       {}",
+								self.render_top(*index1),
+								self.render_top(*index2)
+							));
+							middle[i + 2].push_str(&format!(
+								"{}                       {}",
+								self.render_middle(*index1),
+								self.render_middle(*index2)
+							));
+							middle[i + 3].push_str(&format!(
+								"{}                       {}",
+								self.render_bottom(*index1),
+								self.render_bottom(*index2)
+							));
+							middle[i + 4].push_str("         ▲                                         │");
+							middle[i + 5].push_str("         │                                         ▼");
+							i += 5;
+						},
+					}
+				}
+			},
+		}
 
 		// BOTTOM
 		match &self.bottom {
@@ -167,22 +229,22 @@ impl<'a> Visualizer<'a> {
 					match repetition {
 						0 => {},
 						1 => {
-							bottom[0].push_str("│                    ");
-							bottom[1].push_str("└────────────────────");
+							bottom[0].push_str("         │           ");
+							bottom[1].push_str("         └───────────");
 						},
 						2 => {
-							bottom[0].push_str("│                                         ");
-							bottom[1].push_str("└─────────────────────────────────────────");
+							bottom[0].push_str("         │                                ");
+							bottom[1].push_str("         └────────────────────────────────");
 						},
 						_ => unreachable!("The number has to be between 0 and 2 due to the if condition"),
 					}
 				}
 
-				for index in 0..b.len() {
-					bottom[0].push_str(&self.render_top(self.buffer.get_length() - 3 + index));
-					bottom[1].push_str(&self.render_middle(self.buffer.get_length() - 3 + index));
-					bottom[2].push_str(&self.render_bottom(self.buffer.get_length() - 3 + index));
-					if index < b.len() - 1 {
+				for index in b {
+					bottom[0].push_str(&self.render_top(*index));
+					bottom[1].push_str(&self.render_middle(*index));
+					bottom[2].push_str(&self.render_bottom(*index));
+					if *index != b[b.len() - 1] {
 						bottom[0].push_str("  ");
 						bottom[1].push_str("◀─");
 						bottom[2].push_str("  ");
@@ -192,7 +254,9 @@ impl<'a> Visualizer<'a> {
 		}
 
 		let mut output = top.join("\n");
+		output.push('\n');
 		output.push_str(&middle.join("\n"));
+		output.push('\n');
 		output.push_str(&bottom.join("\n"));
 		output
 	}
@@ -204,143 +268,87 @@ mod test {
 
 	#[test]
 	fn new_test() {
+		let rb = RingBuffer::new(1);
+		assert_eq!(Visualizer::new(&rb).top, vec![0]);
+		assert_eq!(Visualizer::new(&rb).middle, None);
+		assert_eq!(Visualizer::new(&rb).bottom, None);
+
+		let rb = RingBuffer::new(2);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1]);
+		assert_eq!(Visualizer::new(&rb).middle, None);
+		assert_eq!(Visualizer::new(&rb).bottom, None);
+
+		let rb = RingBuffer::new(3);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, None);
+		assert_eq!(Visualizer::new(&rb).bottom, None);
+
+		let rb = RingBuffer::new(4);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, None);
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![3]));
+
+		let rb = RingBuffer::new(5);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, None);
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![4, 3]));
+
+		let rb = RingBuffer::new(6);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, None);
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![5, 4, 3]));
+
+		let rb = RingBuffer::new(7);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::One(3)]));
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![6, 5, 4]));
+
+		let rb = RingBuffer::new(8);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::Two(7, 3)]));
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![6, 5, 4]));
+
+		let rb = RingBuffer::new(9);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::Two(8, 3), MiddleBuffer::One(4),]));
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![7, 6, 5]));
+
+		let rb = RingBuffer::new(10);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::Two(9, 3), MiddleBuffer::Two(8, 4),]));
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![7, 6, 5]));
+
+		let rb = RingBuffer::new(11);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
 		assert_eq!(
-			Visualizer::new(&RingBuffer::new(1)),
-			Visualizer {
-				buffer: &RingBuffer::new(1),
-				top: vec![Buffer::Index(0)],
-				middle: None,
-				bottom: None,
-			}
+			Visualizer::new(&rb).middle,
+			Some(vec![MiddleBuffer::Two(10, 3), MiddleBuffer::Two(9, 4), MiddleBuffer::One(5),])
 		);
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![8, 7, 6]));
+
+		let rb = RingBuffer::new(12);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
 		assert_eq!(
-			Visualizer::new(&RingBuffer::new(2)),
-			Visualizer {
-				buffer: &RingBuffer::new(2),
-				top: vec![Buffer::Index(0), Buffer::Index(1)],
-				middle: None,
-				bottom: None,
-			}
+			Visualizer::new(&rb).middle,
+			Some(vec![
+				MiddleBuffer::Two(11, 3),
+				MiddleBuffer::Two(10, 4),
+				MiddleBuffer::Two(9, 5),
+			])
 		);
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![8, 7, 6]));
+
+		let rb = RingBuffer::new(13);
+		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
 		assert_eq!(
-			Visualizer::new(&RingBuffer::new(3)),
-			Visualizer {
-				buffer: &RingBuffer::new(3),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: None,
-				bottom: None,
-			}
+			Visualizer::new(&rb).middle,
+			Some(vec![
+				MiddleBuffer::Two(12, 3),
+				MiddleBuffer::Two(11, 4),
+				MiddleBuffer::Two(10, 5),
+				MiddleBuffer::One(6),
+			])
 		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(4)),
-			Visualizer {
-				buffer: &RingBuffer::new(4),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: None,
-				bottom: Some(vec![Buffer::Index(3)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(5)),
-			Visualizer {
-				buffer: &RingBuffer::new(5),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: None,
-				bottom: Some(vec![Buffer::Index(3), Buffer::Index(4)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(6)),
-			Visualizer {
-				buffer: &RingBuffer::new(6),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: None,
-				bottom: Some(vec![Buffer::Index(3), Buffer::Index(4), Buffer::Index(5)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(7)),
-			Visualizer {
-				buffer: &RingBuffer::new(7),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![MiddleBuffer::One(Buffer::Index(3))]),
-				bottom: Some(vec![Buffer::Index(4), Buffer::Index(5), Buffer::Index(6)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(8)),
-			Visualizer {
-				buffer: &RingBuffer::new(8),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![MiddleBuffer::Two(Buffer::Index(3), Buffer::Index(4))]),
-				bottom: Some(vec![Buffer::Index(5), Buffer::Index(6), Buffer::Index(7)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(9)),
-			Visualizer {
-				buffer: &RingBuffer::new(9),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![
-					MiddleBuffer::Two(Buffer::Index(3), Buffer::Index(4)),
-					MiddleBuffer::One(Buffer::Index(5)),
-				]),
-				bottom: Some(vec![Buffer::Index(6), Buffer::Index(7), Buffer::Index(8)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(10)),
-			Visualizer {
-				buffer: &RingBuffer::new(10),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![
-					MiddleBuffer::Two(Buffer::Index(3), Buffer::Index(4)),
-					MiddleBuffer::Two(Buffer::Index(5), Buffer::Index(6)),
-					MiddleBuffer::One(Buffer::Index(7)),
-				]),
-				bottom: Some(vec![Buffer::Index(8), Buffer::Index(9), Buffer::Index(10)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(11)),
-			Visualizer {
-				buffer: &RingBuffer::new(11),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![
-					MiddleBuffer::Two(Buffer::Index(3), Buffer::Index(4)),
-					MiddleBuffer::Two(Buffer::Index(5), Buffer::Index(6)),
-					MiddleBuffer::Two(Buffer::Index(7), Buffer::Index(8)),
-				]),
-				bottom: Some(vec![Buffer::Index(9), Buffer::Index(10), Buffer::Index(11)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(12)),
-			Visualizer {
-				buffer: &RingBuffer::new(12),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![
-					MiddleBuffer::Two(Buffer::Index(3), Buffer::Index(4)),
-					MiddleBuffer::Two(Buffer::Index(5), Buffer::Index(6)),
-					MiddleBuffer::Two(Buffer::Index(7), Buffer::Index(8)),
-					MiddleBuffer::One(Buffer::Index(9)),
-				]),
-				bottom: Some(vec![Buffer::Index(10), Buffer::Index(11), Buffer::Index(12)]),
-			}
-		);
-		assert_eq!(
-			Visualizer::new(&RingBuffer::new(13)),
-			Visualizer {
-				buffer: &RingBuffer::new(13),
-				top: vec![Buffer::Index(0), Buffer::Index(1), Buffer::Index(2)],
-				middle: Some(vec![
-					MiddleBuffer::Two(Buffer::Index(3), Buffer::Index(4)),
-					MiddleBuffer::Two(Buffer::Index(5), Buffer::Index(6)),
-					MiddleBuffer::Two(Buffer::Index(7), Buffer::Index(8)),
-					MiddleBuffer::Two(Buffer::Index(9), Buffer::Index(10)),
-				]),
-				bottom: Some(vec![Buffer::Index(11), Buffer::Index(12), Buffer::Index(13)]),
-			}
-		);
+		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![9, 8, 7]));
 	}
 }
