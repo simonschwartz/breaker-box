@@ -1,6 +1,6 @@
 class BufferNode<T> {
-  value: any;
-  next: BufferNode<any> | null;
+  value: T;
+  next: BufferNode<T> | null;
 
   constructor(value: T) {
     this.value = value;
@@ -8,10 +8,10 @@ class BufferNode<T> {
   }
 }
 
-class RingBuffer {
+class RingBuffer<T> {
   #length: number;
-  #cursor: BufferNode<any>;
-  #firstNode: BufferNode<any>;
+  #cursor: BufferNode<T>;
+  #firstNode: BufferNode<T>;
 
   constructor(elements: number) {
     this.#length = elements;
@@ -19,7 +19,7 @@ class RingBuffer {
     this.#firstNode;
 
     for (let i = 0; i < elements; i++) {
-      let node = new BufferNode(null);
+      let node = new BufferNode<T>(null);
 
       if (i === 0) {
         this.#firstNode = node;
@@ -143,6 +143,12 @@ interface Config {
 export type CircuitState = "closed" | "open" | "half_open";
 export type EventResult = "success" | "failure";
 
+type NodeValue = {
+  expires: number,
+  errorCount: number,
+  totalCount: number,
+}
+
 export class CircuitBreaker {
   static State = {
     Closed: "closed" as CircuitState,
@@ -155,7 +161,7 @@ export class CircuitBreaker {
     Failure: "failure" as EventResult,
   } as const;
 
-  #ring: RingBuffer;
+  #ring: RingBuffer<NodeValue>;
   #state: CircuitState;
   #date: DateDependency;
 
@@ -202,10 +208,10 @@ export class CircuitBreaker {
       typeof evalWindow.spans !== "number" ||
       evalWindow.spans <= 0
     ) {
-      this.#ring = new RingBuffer(6);
+      this.#ring = new RingBuffer<NodeValue>(6);
       this.#spanDuration = 120000;
     } else {
-      this.#ring = new RingBuffer(evalWindow.spans + 1);
+      this.#ring = new RingBuffer<NodeValue>(evalWindow.spans + 1);
       this.#spanDuration = (evalWindow.minutes / evalWindow.spans) * 60000;
     }
 

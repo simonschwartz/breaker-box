@@ -4,7 +4,8 @@
   "description": "Automatically detect and respond to failures in dependencies of a system",
   "main": "circuitbreaker.ts",
   "scripts": {
-    "test": "ts-node ./tests/circuitbreaker.test.ts"
+    "test": "ts-node ./tests/circuitbreaker.test.ts",
+    "type": "tsc"
   },
   "author": "",
   "license": "ISC",
