@@ -10,10 +10,10 @@ let mut cb = circuit_breaker::CircuitBreaker::new(Settings {
 	trial_success_required: 20,
 });
 
-fn very_important(cb: &mut CircuitBreaker, success: bool) -> Result<String, String> {
+fn very_important(cb: &mut CircuitBreaker) -> Result<String, String> {
 	match cb.get_state() {
 		State::Open(_) => Err("503: Service Unavailable".to_string()),
-		_ => match get_critical_data_from_service(success) {
+		_ => match get_critical_data_from_service() {
 			Ok(data) => {
 				cb.record::<(), ()>(Ok(()));
 				Ok(data)
