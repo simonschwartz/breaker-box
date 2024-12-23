@@ -32,7 +32,7 @@ impl Default for Settings {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CircuitBreaker {
 	buffer: RingBuffer,
 	state: State,

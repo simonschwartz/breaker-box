@@ -23,8 +23,8 @@ fn main() {
 	}
 
 	let settings = cli_args::parse_args(args);
-	let cb = circuit_breaker::CircuitBreaker::new(settings);
+	let mut cb = circuit_breaker::CircuitBreaker::new(settings);
 
-	let vis = visualizer::Visualizer::new(cb.get_buffer());
+	let vis = visualizer::Visualizer::new(&mut cb);
 	println!("{}", vis.render());
 }

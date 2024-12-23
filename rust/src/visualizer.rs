@@ -1,4 +1,4 @@
-use crate::ring_buffer::RingBuffer;
+use crate::circuit_breaker::CircuitBreaker;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MiddleBuffer {
@@ -8,48 +8,48 @@ enum MiddleBuffer {
 
 #[derive(Debug, PartialEq)]
 pub struct Visualizer<'a> {
-	buffer: &'a RingBuffer,
+	cb: &'a mut CircuitBreaker,
 	top: Vec<usize>,
 	middle: Option<Vec<MiddleBuffer>>,
 	bottom: Option<Vec<usize>>,
 }
 
 impl<'a> Visualizer<'a> {
-	pub fn new(buffer: &'a RingBuffer) -> Self {
-		match buffer.get_length() {
+	pub fn new(cb: &'a mut CircuitBreaker) -> Self {
+		match cb.get_buffer().get_length() {
 			0 => panic!("Must have at least one buffer enabled"),
 			1 => Self {
-				buffer,
+				cb,
 				top: vec![0],
 				middle: None,
 				bottom: None,
 			},
 			2 => Self {
-				buffer,
+				cb,
 				top: vec![0, 1],
 				middle: None,
 				bottom: None,
 			},
 			3 => Self {
-				buffer,
+				cb,
 				top: vec![0, 1, 2],
 				middle: None,
 				bottom: None,
 			},
 			4 => Self {
-				buffer,
+				cb,
 				top: vec![0, 1, 2],
 				middle: None,
 				bottom: Some(vec![3]),
 			},
 			5 => Self {
-				buffer,
+				cb,
 				top: vec![0, 1, 2],
 				middle: None,
 				bottom: Some(vec![4, 3]),
 			},
 			6 => Self {
-				buffer,
+				cb,
 				top: vec![0, 1, 2],
 				middle: None,
 				bottom: Some(vec![5, 4, 3]),
@@ -84,7 +84,7 @@ impl<'a> Visualizer<'a> {
 				}
 
 				Self {
-					buffer,
+					cb,
 					top: vec![0, 1, 2],
 					middle: Some(middle_buffers),
 					bottom: Some(bottom),
@@ -93,31 +93,33 @@ impl<'a> Visualizer<'a> {
 		}
 	}
 
-	fn render_top(&self, index: usize) -> String {
-		let is_active = self.buffer.get_cursor() == index;
+	fn render_buffer_box_top(&self, index: usize) -> String {
+		let is_active = self.cb.get_buffer().get_cursor() == index;
 		match is_active {
 			true => String::from("┏━━━━━━━━━━━━━━━━━┓"),
 			false => String::from("┌─────────────────┐"),
 		}
 	}
 
-	fn render_middle(&self, index: usize) -> String {
-		let is_active = self.buffer.get_cursor() == index;
-		let infos = self.buffer.get_node_info(index);
+	fn render_buffer_box_middle(&self, index: usize) -> String {
+		let is_active = self.cb.get_buffer().get_cursor() == index;
+		let infos = self.cb.get_buffer().get_node_info(index);
 		match is_active {
 			true => format!(
 				"┃ B{index:<2} \x1b[42m {:0>3} \x1b[0m \x1b[41m {:0>3} \x1b[0m ┃",
-				infos.total_count, infos.failure_count
+				infos.total_count - infos.failure_count,
+				infos.failure_count
 			),
 			false => format!(
 				"│ B{index:<2} \x1b[42m {:0>3} \x1b[0m \x1b[41m {:0>3} \x1b[0m │",
-				infos.total_count, infos.failure_count
+				infos.total_count - infos.failure_count,
+				infos.failure_count
 			),
 		}
 	}
 
-	fn render_bottom(&self, index: usize) -> String {
-		let is_active = self.buffer.get_cursor() == index;
+	fn render_buffer_box_bottom(&self, index: usize) -> String {
+		let is_active = self.cb.get_buffer().get_cursor() == index;
 		match is_active {
 			true => String::from("┗━━━━━━━━━━━━━━━━━┛"),
 			false => String::from("└─────────────────┘"),
@@ -125,15 +127,31 @@ impl<'a> Visualizer<'a> {
 	}
 
 	pub fn render(&self) -> String {
+		// NETWORK
+		// TODO:
+		//   ┌─────────────┐
+		//   │   Service   │
+		//   └─────────────┘
+		//           │
+		//           │
+		//       Success
+		//           │
+		//           /
+		//           │
+		//           ▼
+		//       Status: Open
+		//   Error rate: 23.93%
+
+		// RING BUFFER
 		let mut top = [String::new(), String::new(), String::new()];
 		let mut middle = vec![String::new(), String::new()];
 		let mut bottom = [String::new(), String::new(), String::new()];
 
 		// TOP
 		for index in 0..self.top.len() {
-			top[0].push_str(&self.render_top(index));
-			top[1].push_str(&self.render_middle(index));
-			top[2].push_str(&self.render_bottom(index));
+			top[0].push_str(&self.render_buffer_box_top(index));
+			top[1].push_str(&self.render_buffer_box_middle(index));
+			top[2].push_str(&self.render_buffer_box_bottom(index));
 			if index < self.top.len() - 1 {
 				top[0].push_str("  ");
 				top[1].push_str("─▶");
@@ -183,12 +201,18 @@ impl<'a> Visualizer<'a> {
 					]);
 					match node {
 						MiddleBuffer::One(index1) => {
-							middle[i + 1]
-								.push_str(&format!("         │                                {}", self.render_top(*index1)));
-							middle[i + 2]
-								.push_str(&format!("         │                                {}", self.render_middle(*index1)));
-							middle[i + 3]
-								.push_str(&format!("         │                                {}", self.render_bottom(*index1)));
+							middle[i + 1].push_str(&format!(
+								"         │                                {}",
+								self.render_buffer_box_top(*index1)
+							));
+							middle[i + 2].push_str(&format!(
+								"         │                                {}",
+								self.render_buffer_box_middle(*index1)
+							));
+							middle[i + 3].push_str(&format!(
+								"         │                                {}",
+								self.render_buffer_box_bottom(*index1)
+							));
 							middle[i + 4].push_str("         │                                         │");
 							middle[i + 5].push_str("         │                                         ▼");
 							i += 5;
@@ -196,18 +220,18 @@ impl<'a> Visualizer<'a> {
 						MiddleBuffer::Two(index1, index2) => {
 							middle[i + 1].push_str(&format!(
 								"{}                       {}",
-								self.render_top(*index1),
-								self.render_top(*index2)
+								self.render_buffer_box_top(*index1),
+								self.render_buffer_box_top(*index2)
 							));
 							middle[i + 2].push_str(&format!(
 								"{}                       {}",
-								self.render_middle(*index1),
-								self.render_middle(*index2)
+								self.render_buffer_box_middle(*index1),
+								self.render_buffer_box_middle(*index2)
 							));
 							middle[i + 3].push_str(&format!(
 								"{}                       {}",
-								self.render_bottom(*index1),
-								self.render_bottom(*index2)
+								self.render_buffer_box_bottom(*index1),
+								self.render_buffer_box_bottom(*index2)
 							));
 							middle[i + 4].push_str("         ▲                                         │");
 							middle[i + 5].push_str("         │                                         ▼");
@@ -241,9 +265,9 @@ impl<'a> Visualizer<'a> {
 				}
 
 				for index in b {
-					bottom[0].push_str(&self.render_top(*index));
-					bottom[1].push_str(&self.render_middle(*index));
-					bottom[2].push_str(&self.render_bottom(*index));
+					bottom[0].push_str(&self.render_buffer_box_top(*index));
+					bottom[1].push_str(&self.render_buffer_box_middle(*index));
+					bottom[2].push_str(&self.render_buffer_box_bottom(*index));
 					if *index != b[b.len() - 1] {
 						bottom[0].push_str("  ");
 						bottom[1].push_str("◀─");
@@ -260,88 +284,155 @@ impl<'a> Visualizer<'a> {
 		output.push_str(&bottom.join("\n"));
 		output
 	}
+
+	pub fn record<T, E>(&mut self, input: Result<T, E>) {
+		self.cb.record(input);
+	}
 }
 
 #[cfg(test)]
 mod test {
 	use super::*;
+	use crate::circuit_breaker::{CircuitBreaker, Settings};
+
+	#[test]
+	fn render_buffer_box_test() {
+		let mut cb = CircuitBreaker::new(Settings { ..Settings::default() });
+		let mut vis = Visualizer::new(&mut cb);
+		assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
+		assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 000 \x1b[0m \x1b[41m 000 \x1b[0m ┃"));
+		assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
+
+		assert_eq!(vis.render_buffer_box_top(1), String::from("┌─────────────────┐"));
+		assert_eq!(vis.render_buffer_box_middle(1), String::from("│ B1  \x1b[42m 000 \x1b[0m \x1b[41m 000 \x1b[0m │"));
+		assert_eq!(vis.render_buffer_box_bottom(1), String::from("└─────────────────┘"));
+
+		vis.record::<(), &str>(Err(""));
+		vis.record::<(), ()>(Ok(()));
+		vis.record::<(), ()>(Ok(()));
+		vis.record::<(), &str>(Err(""));
+		vis.record::<(), ()>(Ok(()));
+
+		assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
+		assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 003 \x1b[0m \x1b[41m 002 \x1b[0m ┃"));
+		assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
+	}
 
 	#[test]
 	fn new_test() {
-		let rb = RingBuffer::new(1);
-		assert_eq!(Visualizer::new(&rb).top, vec![0]);
-		assert_eq!(Visualizer::new(&rb).middle, None);
-		assert_eq!(Visualizer::new(&rb).bottom, None);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 1,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, None);
 
-		let rb = RingBuffer::new(2);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1]);
-		assert_eq!(Visualizer::new(&rb).middle, None);
-		assert_eq!(Visualizer::new(&rb).bottom, None);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 2,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, None);
 
-		let rb = RingBuffer::new(3);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, None);
-		assert_eq!(Visualizer::new(&rb).bottom, None);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 3,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, None);
 
-		let rb = RingBuffer::new(4);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, None);
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![3]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 4,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![3]));
 
-		let rb = RingBuffer::new(5);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, None);
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![4, 3]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 5,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![4, 3]));
 
-		let rb = RingBuffer::new(6);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, None);
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![5, 4, 3]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 6,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![5, 4, 3]));
 
-		let rb = RingBuffer::new(7);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::One(3)]));
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![6, 5, 4]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 7,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::One(3)]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![6, 5, 4]));
 
-		let rb = RingBuffer::new(8);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::Two(7, 3)]));
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![6, 5, 4]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 8,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(7, 3)]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![6, 5, 4]));
 
-		let rb = RingBuffer::new(9);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::Two(8, 3), MiddleBuffer::One(4),]));
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![7, 6, 5]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 9,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(8, 3), MiddleBuffer::One(4),]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![7, 6, 5]));
 
-		let rb = RingBuffer::new(10);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
-		assert_eq!(Visualizer::new(&rb).middle, Some(vec![MiddleBuffer::Two(9, 3), MiddleBuffer::Two(8, 4),]));
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![7, 6, 5]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 10,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(9, 3), MiddleBuffer::Two(8, 4),]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![7, 6, 5]));
 
-		let rb = RingBuffer::new(11);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 11,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
 		assert_eq!(
-			Visualizer::new(&rb).middle,
+			Visualizer::new(&mut cb).middle,
 			Some(vec![MiddleBuffer::Two(10, 3), MiddleBuffer::Two(9, 4), MiddleBuffer::One(5),])
 		);
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![8, 7, 6]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![8, 7, 6]));
 
-		let rb = RingBuffer::new(12);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 12,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
 		assert_eq!(
-			Visualizer::new(&rb).middle,
+			Visualizer::new(&mut cb).middle,
 			Some(vec![
 				MiddleBuffer::Two(11, 3),
 				MiddleBuffer::Two(10, 4),
 				MiddleBuffer::Two(9, 5),
 			])
 		);
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![8, 7, 6]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![8, 7, 6]));
 
-		let rb = RingBuffer::new(13);
-		assert_eq!(Visualizer::new(&rb).top, vec![0, 1, 2]);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 13,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
 		assert_eq!(
-			Visualizer::new(&rb).middle,
+			Visualizer::new(&mut cb).middle,
 			Some(vec![
 				MiddleBuffer::Two(12, 3),
 				MiddleBuffer::Two(11, 4),
@@ -349,6 +440,6 @@ mod test {
 				MiddleBuffer::One(6),
 			])
 		);
-		assert_eq!(Visualizer::new(&rb).bottom, Some(vec![9, 8, 7]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![9, 8, 7]));
 	}
 }
