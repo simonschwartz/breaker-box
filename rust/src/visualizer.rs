@@ -1,4 +1,4 @@
-use crate::circuit_breaker::CircuitBreaker;
+use crate::circuit_breaker::{CircuitBreaker, State};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum MiddleBuffer {
@@ -126,21 +126,32 @@ impl<'a> Visualizer<'a> {
 		}
 	}
 
-	pub fn render(&self) -> String {
+	pub fn render(&mut self) -> String {
+		let mut output = String::new();
+
 		// NETWORK
-		// TODO:
-		//   ┌─────────────┐
-		//   │   Service   │
-		//   └─────────────┘
-		//           │
-		//           │
-		//       Success
-		//           │
-		//           /
-		//           │
-		//           ▼
-		//       Status: Open
-		//   Error rate: 23.93%
+		output.push_str(
+			r#"
+                       ┌─────────────┐
+                       │   Service   │
+                       └─────────────┘
+                              │"#,
+		);
+		output.push_str(&format!("\n                           Success"));
+		output.push_str("\n                              │");
+		let state = self.cb.get_state();
+		match state {
+			State::Closed => output.push_str("\n                              │"),
+			State::HalfOpen => output.push_str("\n                              /"),
+			State::Open(_) => output.push_str("\n                              -"),
+		}
+		output.push_str(
+			r#"
+                              │
+                              ▼"#,
+		);
+		output.push_str(&format!("\n                         Status: {state:?}"));
+		output.push_str(&format!("\n                     Error Rate: {}%\n", self.cb.get_error_rate()));
 
 		// RING BUFFER
 		let mut top = [String::new(), String::new(), String::new()];
@@ -277,7 +288,7 @@ impl<'a> Visualizer<'a> {
 			},
 		}
 
-		let mut output = top.join("\n");
+		output.push_str(&top.join("\n"));
 		output.push('\n');
 		output.push_str(&middle.join("\n"));
 		output.push('\n');

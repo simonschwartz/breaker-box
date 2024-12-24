@@ -25,6 +25,6 @@ fn main() {
 	let settings = cli_args::parse_args(args);
 	let mut cb = circuit_breaker::CircuitBreaker::new(settings);
 
-	let vis = visualizer::Visualizer::new(&mut cb);
+	let mut vis = visualizer::Visualizer::new(&mut cb);
 	println!("{}", vis.render());
 }

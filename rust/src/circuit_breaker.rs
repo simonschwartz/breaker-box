@@ -130,6 +130,10 @@ impl CircuitBreaker {
 	pub fn get_buffer(&self) -> &RingBuffer {
 		&self.buffer
 	}
+
+	pub fn get_error_rate(&self) -> f32 {
+		self.buffer.get_error_rate(self.settings.min_eval_size)
+	}
 }
 
 impl Default for CircuitBreaker {
