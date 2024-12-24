@@ -1,8 +1,6 @@
 package circuitbreaker
 
 import (
-	"container/ring"
-	"math"
 	"sync"
 	"time"
 )
@@ -51,7 +49,7 @@ type Cursor struct {
 type CircuitBreaker struct {
 	mu     sync.RWMutex
 	state  State
-	cursor *ring.Ring
+	buffer *RingBuffer
 	time   ITime
 
 	// duration of data each node/span in the buffer stores
@@ -119,12 +117,12 @@ func (b *Builder) SetEvalWindow(minutes int, spans int) *Builder {
 
 	if spans <= 0 {
 		b.cb.spanDuration = DefaultSpanDuration
-		b.cb.cursor = ring.New(minutes + 1)
+		b.cb.buffer = NewRingBuffer(minutes + 1)
 		return b
 	}
 
 	b.cb.spanDuration = time.Duration(float64(minutes) / float64(spans) * float64(time.Minute))
-	b.cb.cursor = ring.New(spans + 1)
+	b.cb.buffer = NewRingBuffer(spans + 1)
 
 	return b
 }
@@ -185,7 +183,7 @@ func New() *Builder {
 	return &Builder{
 		cb: &CircuitBreaker{
 			state:                  Closed,
-			cursor:                 ring.New(DefaultEvalWindow + 1),
+			buffer:                 NewRingBuffer(DefaultEvalWindow + 1),
 			spanDuration:           DefaultSpanDuration,
 			time:                   &Time{},
 			minEvalSize:            DefaultMinEvalSize,
@@ -193,14 +191,6 @@ func New() *Builder {
 			trialSuccessesRequired: DefaultTrialSuccessesRequired,
 			retryTimeout:           DefaultRetryTimeout,
 		},
-	}
-}
-
-func (cb *CircuitBreaker) clearBuffer() {
-	current := cb.cursor
-	for i := 0; i < cb.cursor.Len(); i++ {
-		current.Value = nil
-		current = current.Next()
 	}
 }
 
@@ -242,64 +232,31 @@ func (cb *CircuitBreaker) Record(result Result) {
 		return
 	}
 
-	if cb.cursor.Value == nil {
-		cb.cursor.Value = &Cursor{
-			Expires:    cb.time.Now().Add(cb.spanDuration),
-			ErrorCount: 0,
-			TotalCount: 0,
-		}
+	if cb.buffer.Cursor().Expires.IsZero() {
+		cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
 	}
 
-	if cb.cursor.Value.(*Cursor).Expires.Before(cb.time.Now()) {
-		cb.cursor = cb.cursor.Next()
-		cb.cursor.Value = &Cursor{
-			Expires:    cb.time.Now().Add(cb.spanDuration),
-			ErrorCount: 0,
-			TotalCount: 0,
-		}
-
-		// If the error rate exceeds the threshold, set the circuit breaker to Open
-		errorRate := cb.GetErrorRate()
-		if cb.state == Closed && errorRate > cb.errorThreshold {
-			cb.state = Open
-			cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
-			cb.clearBuffer()
-		}
+	if cb.buffer.Cursor().Expires.Before(cb.time.Now()) {
+		cb.buffer.Next()
+		cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
 	}
 
-	if cb.cursor.Value != nil {
-		if result == Failure && cb.cursor.Value != nil {
-			cb.cursor.Value.(*Cursor).ErrorCount++
-		}
+	// If the error rate exceeds the threshold, set the circuit breaker to Open
+	errorRate := cb.GetErrorRate()
+	if cb.state == Closed && errorRate > cb.errorThreshold {
+		cb.state = Open
+		cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
+		cb.buffer.ClearBuffer()
+	}
 
-		cb.cursor.Value.(*Cursor).TotalCount++
+	if result == Failure {
+		cb.buffer.Cursor().FailureCount++
+	} else {
+		cb.buffer.Cursor().SuccessCount++
 	}
 }
 
 func (cb *CircuitBreaker) GetErrorRate() float64 {
-	errors := 0
-	count := 0
-	nodes := 0
-	skipCurrNode := true
-
-	// Do will traverse the queue starting with the current node
-	// we ignore the current node and all empty nodes
-	cb.cursor.Do(func(p any) {
-		if skipCurrNode {
-			skipCurrNode = false
-			return
-		}
-		if c, ok := p.(*Cursor); ok {
-			errors += c.ErrorCount
-			count += c.TotalCount
-			nodes++
-		}
-	})
-
-	if count < cb.minEvalSize || nodes < cb.cursor.Len()-1 {
-		return 0
-	}
-
-	errorRate := (float64(errors) / float64(count)) * 100
-	return math.Round(errorRate*100) / 100
+	errorRate := cb.buffer.GetErrorRate(cb.minEvalSize)
+	return errorRate
 }
