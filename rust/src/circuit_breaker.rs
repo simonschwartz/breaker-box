@@ -9,6 +9,35 @@ pub enum State {
 	HalfOpen,
 }
 
+impl std::fmt::Display for State {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let alt = f.alternate();
+		match self {
+			State::Closed => {
+				if alt {
+					write!(f, "│")
+				} else {
+					write!(f, "Closed     ")
+				}
+			},
+			State::Open(_) => {
+				if alt {
+					write!(f, "\x1b[0m─")
+				} else {
+					write!(f, "\x1b[41m Open \x1b[0m     ")
+				}
+			},
+			State::HalfOpen => {
+				if alt {
+					write!(f, "/")
+				} else {
+					write!(f, "\x1b[43m Half Open \x1b[0m")
+				}
+			},
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
 	pub buffer_size: usize,
@@ -129,6 +158,14 @@ impl CircuitBreaker {
 
 	pub fn get_buffer(&self) -> &RingBuffer {
 		&self.buffer
+	}
+
+	pub fn get_trial_success(&self) -> usize {
+		self.trial_success
+	}
+
+	pub fn get_settings(&self) -> &Settings {
+		&self.settings
 	}
 
 	pub fn get_error_rate(&self) -> f32 {

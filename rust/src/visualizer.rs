@@ -1,3 +1,11 @@
+use std::{
+	io::{self, Read},
+	process::Command,
+	sync::mpsc,
+	thread,
+	time::{Duration, Instant},
+};
+
 use crate::circuit_breaker::{CircuitBreaker, State};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -126,32 +134,53 @@ impl<'a> Visualizer<'a> {
 		}
 	}
 
-	pub fn render(&mut self) -> String {
+	pub fn record<T, E>(&mut self, input: Result<T, E>) {
+		self.cb.record(input);
+	}
+
+	pub fn render<T, E>(&mut self, input: Option<Result<T, E>>) -> String {
 		let mut output = String::new();
+		let mut request_color = "";
+		let mut request = "   │   ";
+		if let Some(i) = input {
+			if i.is_ok() {
+				request_color = "\x1b[32m";
+				request = "Success";
+			} else {
+				request_color = "\x1b[31m";
+				request = "Failure";
+			}
+		}
 
 		// NETWORK
+		let state = self.cb.get_state();
 		output.push_str(
 			r#"
                        ┌─────────────┐
                        │   Service   │
-                       └─────────────┘
-                              │"#,
+                       └─────────────┘"#,
 		);
-		output.push_str(&format!("\n                           Success"));
+		output.push_str(&format!("\n                              {request_color}│"));
+		output.push_str(&format!("\n                           {request}"));
 		output.push_str("\n                              │");
-		let state = self.cb.get_state();
-		match state {
-			State::Closed => output.push_str("\n                              │"),
-			State::HalfOpen => output.push_str("\n                              /"),
-			State::Open(_) => output.push_str("\n                              -"),
-		}
-		output.push_str(
-			r#"
-                              │
-                              ▼"#,
-		);
-		output.push_str(&format!("\n                         Status: {state:?}"));
+		output.push_str(&format!("\n                              {state:#}"));
+		output.push_str("\n                              │");
+		output.push_str("\n                              ▼\x1b[0m");
+		output.push_str(&format!("\n                         Status: {state}"));
 		output.push_str(&format!("\n                     Error Rate: {}%\n", self.cb.get_error_rate()));
+		match state {
+			State::Closed => {
+				let timer = self.cb.get_settings().buffer_span_duration.saturating_sub(self.cb.get_buffer().get_elapsed_time());
+				output.push_str(&format!("                    Next Buffer: {}s   \n", timer.as_secs()));
+			},
+			State::Open(duration) => {
+				let timer = self.cb.get_settings().retry_timeout.saturating_sub(duration.elapsed());
+				output.push_str(&format!("                          Retry: {}s   \n", timer.as_secs()));
+			},
+			State::HalfOpen => {
+				output.push_str(&format!("                  Trial Success: {}   \n", self.cb.get_trial_success()));
+			},
+		}
 
 		// RING BUFFER
 		let mut top = [String::new(), String::new(), String::new()];
@@ -293,11 +322,90 @@ impl<'a> Visualizer<'a> {
 		output.push_str(&middle.join("\n"));
 		output.push('\n');
 		output.push_str(&bottom.join("\n"));
+		output.push('\n');
 		output
 	}
 
-	pub fn record<T, E>(&mut self, input: Result<T, E>) {
-		self.cb.record(input);
+	pub fn start(&mut self) -> io::Result<()> {
+		#[cfg(target_os = "windows")]
+		compile_error!(
+			"Windows is not supported for the visualizer due to the lack of raw mode. Use WSL to make it compile!"
+		);
+
+		let _raw = RawMode::enter()?;
+
+		// A thread just for stdin
+		let (sender, receiver) = mpsc::channel::<u8>();
+		{
+			let stdin = io::stdin();
+			thread::spawn(move || {
+				let mut lock = stdin.lock();
+				let mut buffer = [0u8; 1];
+				loop {
+					match lock.read_exact(&mut buffer) {
+						Ok(_) => {
+							if sender.send(buffer[0]).is_err() {
+								break;
+							}
+						},
+						Err(_) => break,
+					}
+				}
+			});
+		}
+
+		let mut last_tick = Instant::now();
+		let render = self.render::<(), &str>(None);
+		let lines = render.bytes().filter(|&b| b == b'\n').count();
+		let reset_pos = format!("\x1b[{lines}F");
+		print!("{render}");
+
+		loop {
+			if let Ok(byte) = receiver.try_recv() {
+				match byte as char {
+					'q' => {
+						println!("\n\nBye...");
+						break;
+					},
+					's' => {
+						self.record::<(), &str>(Ok(()));
+						print!("{reset_pos}{}", self.render::<(), &str>(Some(Ok(()))));
+						last_tick = Instant::now();
+					},
+					'f' => {
+						self.record::<(), &str>(Err(""));
+						print!("{reset_pos}{}", self.render::<(), &str>(Some(Err(""))));
+						last_tick = Instant::now();
+					},
+					'x' => {
+						print!("{reset_pos}{}", self.render::<(), &str>(None));
+					},
+					_ => {},
+				}
+			}
+
+			if last_tick.elapsed() >= Duration::from_secs(1) {
+				print!("{reset_pos}{}", self.render::<(), &str>(None));
+				last_tick = Instant::now();
+			}
+		}
+
+		Ok(())
+	}
+}
+
+struct RawMode;
+
+impl RawMode {
+	fn enter() -> io::Result<Self> {
+		Command::new("stty").arg("-icanon").arg("-echo").spawn()?.wait()?;
+		Ok(RawMode)
+	}
+}
+
+impl Drop for RawMode {
+	fn drop(&mut self) {
+		let _ = Command::new("stty").arg("icanon").arg("echo").spawn().and_then(|mut c| c.wait());
 	}
 }
 

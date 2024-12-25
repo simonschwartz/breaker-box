@@ -26,5 +26,5 @@ fn main() {
 	let mut cb = circuit_breaker::CircuitBreaker::new(settings);
 
 	let mut vis = visualizer::Visualizer::new(&mut cb);
-	println!("{}", vis.render());
+	let _ = vis.start();
 }

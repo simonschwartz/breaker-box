@@ -74,6 +74,10 @@ impl RingBuffer {
 		self.nodes[self.cursor].expires.elapsed() >= timeout
 	}
 
+	pub fn get_elapsed_time(&self) -> Duration {
+		self.nodes[self.cursor].expires.elapsed()
+	}
+
 	pub fn next(&mut self) {
 		if self.cursor == self.nodes.len() - 1 {
 			self.cursor = 0;
