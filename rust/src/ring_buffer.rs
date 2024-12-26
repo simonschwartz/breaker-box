@@ -53,10 +53,6 @@ impl RingBuffer {
 		self.nodes.len()
 	}
 
-	pub fn get_cursor_node(&self) -> &Node {
-		&self.nodes[self.cursor]
-	}
-
 	pub fn get_cursor(&self) -> usize {
 		self.cursor
 	}
@@ -140,29 +136,23 @@ mod test {
 	}
 
 	#[test]
-	fn get_cursor_node_test() {
-		assert_eq!(RingBuffer::new(1).get_cursor_node().failure_count, 0);
-		assert_eq!(RingBuffer::new(1).get_cursor_node().total_count, 0);
-	}
-
-	#[test]
 	fn add_result_test() {
 		let mut buffer = RingBuffer::new(1);
 
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 0);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor_node().failure_count, 1);
-		assert_eq!(buffer.get_cursor_node().total_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 1);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor_node().failure_count, 1);
-		assert_eq!(buffer.get_cursor_node().total_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 2);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor_node().failure_count, 1);
-		assert_eq!(buffer.get_cursor_node().total_count, 3);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 3);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor_node().failure_count, 2);
-		assert_eq!(buffer.get_cursor_node().total_count, 4);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 4);
 	}
 
 	#[test]
@@ -196,34 +186,34 @@ mod test {
 	fn next_add_result_test() {
 		let mut buffer = RingBuffer::new(3);
 		assert_eq!(buffer.cursor, 0);
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 0);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor_node().failure_count, 1);
-		assert_eq!(buffer.get_cursor_node().total_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 1);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor_node().failure_count, 2);
-		assert_eq!(buffer.get_cursor_node().total_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 2);
 		buffer.next();
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 0);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 1);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 2);
 		buffer.next();
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 0);
 		buffer.add_success();
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 1);
 		buffer.add_failure();
-		assert_eq!(buffer.get_cursor_node().failure_count, 1);
-		assert_eq!(buffer.get_cursor_node().total_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 2);
 		buffer.next();
-		assert_eq!(buffer.get_cursor_node().failure_count, 0);
-		assert_eq!(buffer.get_cursor_node().total_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.get_cursor()).total_count, 0);
 	}
 }

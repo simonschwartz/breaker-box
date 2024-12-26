@@ -341,14 +341,9 @@ impl<'a> Visualizer<'a> {
 			thread::spawn(move || {
 				let mut lock = stdin.lock();
 				let mut buffer = [0u8; 1];
-				loop {
-					match lock.read_exact(&mut buffer) {
-						Ok(_) => {
-							if sender.send(buffer[0]).is_err() {
-								break;
-							}
-						},
-						Err(_) => break,
+				while lock.read_exact(&mut buffer).is_ok() {
+					if sender.send(buffer[0]).is_err() {
+						break;
 					}
 				}
 			});

@@ -79,37 +79,6 @@ impl CircuitBreaker {
 		}
 	}
 
-	pub fn set_buffer_size(&mut self, size: usize) -> &mut Self {
-		self.settings.buffer_size = size;
-		self.buffer = RingBuffer::new(size);
-		self
-	}
-
-	pub fn set_min_eval_size(&mut self, size: usize) -> &mut Self {
-		self.settings.min_eval_size = size;
-		self
-	}
-
-	pub fn set_error_threshold(&mut self, threshold: f32) -> &mut Self {
-		self.settings.error_threshold = threshold;
-		self
-	}
-
-	pub fn set_retry_timeout(&mut self, timeout: Duration) -> &mut Self {
-		self.settings.retry_timeout = timeout;
-		self
-	}
-
-	pub fn set_buffer_span_duration(&mut self, duration: Duration) -> &mut Self {
-		self.settings.buffer_span_duration = duration;
-		self
-	}
-
-	pub fn set_trial_success_required(&mut self, amount: usize) -> &mut Self {
-		self.settings.trial_success_required = amount;
-		self
-	}
-
 	pub fn get_state(&mut self) -> State {
 		if let State::Open(timeout) = self.state {
 			if timeout.elapsed() >= self.settings.retry_timeout {
@@ -187,16 +156,26 @@ mod test {
 	fn settings_test() {
 		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_length(), 5);
 		assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
-		assert_eq!(CircuitBreaker::new(Settings::default()).set_buffer_size(10).buffer.get_length(), 10);
 		assert_eq!(
-			CircuitBreaker::new(Settings::default())
-				.set_buffer_size(666)
-				.set_min_eval_size(5)
-				.set_error_threshold(99.99)
-				.set_retry_timeout(Duration::from_millis(20))
-				.set_buffer_span_duration(Duration::from_millis(999))
-				.set_trial_success_required(42)
-				.settings,
+			CircuitBreaker::new(Settings {
+				buffer_size: 10,
+				..Settings::default()
+			})
+			.buffer
+			.get_length(),
+			10
+		);
+		assert_eq!(
+			CircuitBreaker::new(Settings {
+				buffer_size: 666,
+				min_eval_size: 5,
+				error_threshold: 99.99,
+				retry_timeout: Duration::from_millis(20),
+				buffer_span_duration: Duration::from_millis(999),
+				trial_success_required: 42,
+				..Settings::default()
+			})
+			.settings,
 			Settings {
 				buffer_size: 666,
 				min_eval_size: 5,
