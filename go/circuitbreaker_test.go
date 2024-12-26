@@ -103,7 +103,7 @@ func TestCircuitBreaker(t *testing.T) {
 	state = cb.GetState()
 
 	assert(t, circuitbreaker.Open, state)
-	assert(t, 0.0, rate)
+	assert(t, rate, 0.0)
 
 	// Third - wait 1 minute for the circuit to move to HalfOpen
 	FastForward(61*time.Second, mockTime)

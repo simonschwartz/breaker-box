@@ -47,10 +47,11 @@ type Cursor struct {
 }
 
 type CircuitBreaker struct {
-	mu     sync.RWMutex
-	state  State
-	buffer *RingBuffer
-	time   ITime
+	mu        sync.RWMutex
+	state     State
+	buffer    *RingBuffer
+	errorRate float64
+	time      ITime
 
 	// duration of data each node/span in the buffer stores
 	spanDuration time.Duration
@@ -184,6 +185,7 @@ func New() *Builder {
 		cb: &CircuitBreaker{
 			state:                  Closed,
 			buffer:                 NewRingBuffer(DefaultEvalWindow + 1),
+			errorRate:              0.00,
 			spanDuration:           DefaultSpanDuration,
 			time:                   &Time{},
 			minEvalSize:            DefaultMinEvalSize,
@@ -239,14 +241,15 @@ func (cb *CircuitBreaker) Record(result Result) {
 	if cb.buffer.Cursor().Expires.Before(cb.time.Now()) {
 		cb.buffer.Next()
 		cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
+		cb.errorRate = cb.buffer.GetErrorRate(cb.minEvalSize)
 	}
 
 	// If the error rate exceeds the threshold, set the circuit breaker to Open
-	errorRate := cb.GetErrorRate()
-	if cb.state == Closed && errorRate > cb.errorThreshold {
+	if cb.state == Closed && cb.errorRate > cb.errorThreshold {
 		cb.state = Open
 		cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
 		cb.buffer.ClearBuffer()
+		cb.errorRate = 0.00
 	}
 
 	if result == Failure {
@@ -257,6 +260,5 @@ func (cb *CircuitBreaker) Record(result Result) {
 }
 
 func (cb *CircuitBreaker) GetErrorRate() float64 {
-	errorRate := cb.buffer.GetErrorRate(cb.minEvalSize)
-	return errorRate
+	return cb.errorRate
 }
