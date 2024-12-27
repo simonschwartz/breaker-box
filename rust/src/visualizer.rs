@@ -167,7 +167,7 @@ impl<'a> Visualizer<'a> {
 		output.push_str("\n                              │");
 		output.push_str("\n                              ▼\x1b[0m");
 		output.push_str(&format!("\n                         Status: {state}"));
-		output.push_str(&format!("\n                     Error Rate: {}%\n", self.cb.get_error_rate()));
+		output.push_str(&format!("\n                     Error Rate: {:0<6?}%\n", self.cb.get_error_rate()));
 		match state {
 			State::Closed => {
 				let timer = self.cb.get_settings().buffer_span_duration.saturating_sub(self.cb.get_buffer().get_elapsed_time());
@@ -323,6 +323,7 @@ impl<'a> Visualizer<'a> {
 		output.push('\n');
 		output.push_str(&bottom.join("\n"));
 		output.push('\n');
+		output.push_str("\n\n    [s]=Successful request  [f]=Request Failure  [q]=Quit\n");
 		output
 	}
 
@@ -359,7 +360,7 @@ impl<'a> Visualizer<'a> {
 			if let Ok(byte) = receiver.try_recv() {
 				match byte as char {
 					'q' => {
-						println!("\n\nBye...");
+						println!("Bye...");
 						break;
 					},
 					's' => {

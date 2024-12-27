@@ -100,6 +100,7 @@ impl CircuitBreaker {
 
 				if self.trial_success >= self.settings.trial_success_required {
 					self.state = State::Closed;
+					self.buffer.next();
 				}
 				return;
 			} else {
@@ -110,11 +111,12 @@ impl CircuitBreaker {
 		}
 
 		if self.buffer.has_exired(self.settings.buffer_span_duration) {
-			self.buffer.next();
 			let error_rate = self.buffer.get_error_rate(self.settings.min_eval_size);
 			if self.state == State::Closed && error_rate > self.settings.error_threshold {
 				self.state = State::Open(Instant::now());
-				self.buffer = RingBuffer::new(self.settings.buffer_size);
+				return;
+			} else {
+				self.buffer.next();
 			}
 		}
 
