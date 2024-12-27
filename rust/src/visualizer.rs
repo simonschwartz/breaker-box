@@ -115,13 +115,11 @@ impl<'a> Visualizer<'a> {
 		match is_active {
 			true => format!(
 				"┃ B{index:<2} \x1b[42m {:0>3} \x1b[0m \x1b[41m {:0>3} \x1b[0m ┃",
-				infos.total_count - infos.failure_count,
-				infos.failure_count
+				infos.success_count, infos.failure_count
 			),
 			false => format!(
 				"│ B{index:<2} \x1b[42m {:0>3} \x1b[0m \x1b[41m {:0>3} \x1b[0m │",
-				infos.total_count - infos.failure_count,
-				infos.failure_count
+				infos.success_count, infos.failure_count
 			),
 		}
 	}
@@ -178,7 +176,11 @@ impl<'a> Visualizer<'a> {
 				output.push_str(&format!("                          Retry: {}s   \n", timer.as_secs()));
 			},
 			State::HalfOpen => {
-				output.push_str(&format!("                  Trial Success: {}   \n", self.cb.get_trial_success()));
+				output.push_str(&format!(
+					"                  Trial Success: {}/{}   \n",
+					self.cb.get_trial_success(),
+					self.cb.get_settings().trial_success_required
+				));
 			},
 		}
 

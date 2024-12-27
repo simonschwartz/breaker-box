@@ -99,6 +99,7 @@ impl CircuitBreaker {
 				self.trial_success += 1;
 
 				if self.trial_success >= self.settings.trial_success_required {
+					self.trial_success = 0;
 					self.state = State::Closed;
 					self.buffer.next();
 				}
@@ -155,7 +156,7 @@ mod test {
 	use super::*;
 
 	#[test]
-	fn settings_test() {
+	fn new_test() {
 		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_length(), 5);
 		assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
 		assert_eq!(
@@ -187,5 +188,35 @@ mod test {
 				trial_success_required: 42,
 			}
 		);
+	}
+
+	#[test]
+	fn get_state_test() {
+		// TODO
+	}
+
+	#[test]
+	fn record_test() {
+		// TODO
+	}
+
+	#[test]
+	fn get_buffer_test() {
+		// TODO
+	}
+
+	#[test]
+	fn get_trial_success_test() {
+		// TODO
+	}
+
+	#[test]
+	fn get_settings_test() {
+		// TODO
+	}
+
+	#[test]
+	fn get_error_rate_test() {
+		// TODO
 	}
 }
