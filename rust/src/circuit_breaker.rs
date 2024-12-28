@@ -80,16 +80,12 @@ impl CircuitBreaker {
 	}
 
 	pub fn get_state(&mut self) -> State {
-		if let State::Open(timeout) = self.state {
-			if timeout.elapsed() >= self.settings.retry_timeout {
-				self.state = State::HalfOpen;
-			}
-		}
-
+		self.evaluate_state();
 		self.state
 	}
 
 	pub fn record<T, E>(&mut self, input: Result<T, E>) {
+		self.evaluate_state();
 		if let State::Open(_) = self.state {
 			return;
 		}
@@ -97,12 +93,7 @@ impl CircuitBreaker {
 		if let State::HalfOpen = self.state {
 			if input.is_ok() {
 				self.trial_success += 1;
-
-				if self.trial_success >= self.settings.trial_success_required {
-					self.trial_success = 0;
-					self.state = State::Closed;
-					self.buffer.next();
-				}
+				self.evaluate_state();
 				return;
 			} else {
 				self.state = State::Open(Instant::now());
@@ -111,20 +102,37 @@ impl CircuitBreaker {
 			}
 		}
 
-		if self.buffer.has_exired(self.settings.buffer_span_duration) {
-			let error_rate = self.buffer.get_error_rate(self.settings.min_eval_size);
-			if self.state == State::Closed && error_rate > self.settings.error_threshold {
-				self.state = State::Open(Instant::now());
-				return;
-			} else {
-				self.buffer.next();
-			}
-		}
-
 		if input.is_ok() {
 			self.buffer.add_success();
 		} else {
 			self.buffer.add_failure();
+		}
+	}
+
+	pub fn evaluate_state(&mut self) {
+		match self.state {
+			State::Open(timeout) => {
+				if timeout.elapsed() >= self.settings.retry_timeout {
+					self.state = State::HalfOpen;
+				}
+			},
+			State::Closed => {
+				if self.buffer.has_exired(self.settings.buffer_span_duration) {
+					let error_rate = self.buffer.get_error_rate(self.settings.min_eval_size);
+					if self.state == State::Closed && error_rate > self.settings.error_threshold {
+						self.state = State::Open(Instant::now());
+					} else {
+						self.buffer.next();
+					}
+				}
+			},
+			State::HalfOpen => {
+				if self.trial_success >= self.settings.trial_success_required {
+					self.trial_success = 0;
+					self.state = State::Closed;
+					self.buffer.next();
+				}
+			},
 		}
 	}
 
