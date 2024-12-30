@@ -200,7 +200,7 @@ mod test {
 
 	#[test]
 	fn get_state_test() {
-		// TODO
+		assert_eq!(CircuitBreaker::new(Settings::default()).get_state(), State::Closed);
 	}
 
 	#[test]
