@@ -64,6 +64,7 @@ impl Default for Settings {
 #[derive(Debug, PartialEq)]
 pub struct CircuitBreaker {
 	buffer: RingBuffer,
+	started: Instant,
 	state: State,
 	trial_success: usize,
 	settings: Settings,
@@ -73,6 +74,7 @@ impl CircuitBreaker {
 	pub fn new(settings: Settings) -> Self {
 		Self {
 			buffer: RingBuffer::new(settings.buffer_size),
+			started: Instant::now(),
 			state: State::Closed,
 			trial_success: 0,
 			settings,
@@ -131,9 +133,23 @@ impl CircuitBreaker {
 					self.trial_success = 0;
 					self.state = State::Closed;
 					self.buffer.next();
+					self.started = Instant::now();
 				}
 			},
 		}
+	}
+
+	fn get_active_buffer_node(&self) -> usize {
+		let now = Instant::now();
+		let elapsed = now.duration_since(self.started);
+		self.get_active_buffer_node_from_elapsed(elapsed)
+	}
+
+	fn get_active_buffer_node_from_elapsed(&self, elapsed: Duration) -> usize {
+		let spans_elapsed = elapsed.as_nanos() / self.settings.buffer_span_duration.as_nanos();
+		let index = spans_elapsed % (self.settings.buffer_size as u128);
+
+		index as usize
 	}
 
 	pub fn get_buffer(&self) -> &RingBuffer {
@@ -206,6 +222,28 @@ mod test {
 	#[test]
 	fn record_test() {
 		// TODO
+	}
+
+	#[test]
+	fn evaluate_state_test() {
+		// TODO
+	}
+
+	#[test]
+	fn get_active_buffer_node_test() {
+		let cb = CircuitBreaker::new(Settings {
+			buffer_size: 10,
+			buffer_span_duration: Duration::from_secs(1),
+			..Settings::default()
+		});
+
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::ZERO), 0);
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_millis(999)), 0);
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(1)), 1);
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(9)), 9);
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(10)), 0);
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(99)), 9);
+		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(100)), 0);
 	}
 
 	#[test]
