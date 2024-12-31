@@ -24,7 +24,7 @@ pub struct Visualizer<'a> {
 
 impl<'a> Visualizer<'a> {
 	pub fn new(cb: &'a mut CircuitBreaker) -> Self {
-		match cb.get_buffer().get_length() {
+		match cb.get_buffer().get_buffer_size() {
 			0 => panic!("Must have at least one buffer enabled"),
 			1 => Self {
 				cb,
@@ -101,16 +101,18 @@ impl<'a> Visualizer<'a> {
 		}
 	}
 
-	fn render_buffer_box_top(&self, index: usize) -> String {
-		let is_active = self.cb.get_buffer().get_cursor() == index;
+	fn render_buffer_box_top(&mut self, index: usize) -> String {
+		let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
+		let is_active = self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index;
 		match is_active {
 			true => String::from("┏━━━━━━━━━━━━━━━━━┓"),
 			false => String::from("┌─────────────────┐"),
 		}
 	}
 
-	fn render_buffer_box_middle(&self, index: usize) -> String {
-		let is_active = self.cb.get_buffer().get_cursor() == index;
+	fn render_buffer_box_middle(&mut self, index: usize) -> String {
+		let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
+		let is_active = self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index;
 		let infos = self.cb.get_buffer().get_node_info(index);
 		match is_active {
 			true => format!(
@@ -124,8 +126,9 @@ impl<'a> Visualizer<'a> {
 		}
 	}
 
-	fn render_buffer_box_bottom(&self, index: usize) -> String {
-		let is_active = self.cb.get_buffer().get_cursor() == index;
+	fn render_buffer_box_bottom(&mut self, index: usize) -> String {
+		let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
+		let is_active = self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index;
 		match is_active {
 			true => String::from("┗━━━━━━━━━━━━━━━━━┛"),
 			false => String::from("└─────────────────┘"),
@@ -168,7 +171,12 @@ impl<'a> Visualizer<'a> {
 		output.push_str(&format!("\n                     Error Rate: {:0<6?}%\n", self.cb.get_error_rate()));
 		match state {
 			State::Closed => {
-				let timer = self.cb.get_settings().buffer_span_duration.saturating_sub(self.cb.get_buffer().get_elapsed_time());
+				let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
+				let timer = self
+					.cb
+					.get_settings()
+					.buffer_span_duration
+					.saturating_sub(self.cb.get_buffer().get_elapsed_time(buffer_span_duration, Instant::now()));
 				output.push_str(&format!("                    Next Buffer: {}s   \n", timer.as_secs()));
 			},
 			State::Open(duration) => {
@@ -219,7 +227,8 @@ impl<'a> Visualizer<'a> {
 		}
 
 		// MIDDLE
-		match &self.middle {
+		let middle_nodes = self.middle.take();
+		match middle_nodes {
 			None => {
 				if self.bottom.is_some() {
 					middle[0].push_str("         ▲                                         │");
@@ -243,17 +252,15 @@ impl<'a> Visualizer<'a> {
 					]);
 					match node {
 						MiddleBuffer::One(index1) => {
-							middle[i + 1].push_str(&format!(
-								"         │                                {}",
-								self.render_buffer_box_top(*index1)
-							));
+							middle[i + 1]
+								.push_str(&format!("         │                                {}", self.render_buffer_box_top(index1)));
 							middle[i + 2].push_str(&format!(
 								"         │                                {}",
-								self.render_buffer_box_middle(*index1)
+								self.render_buffer_box_middle(index1)
 							));
 							middle[i + 3].push_str(&format!(
 								"         │                                {}",
-								self.render_buffer_box_bottom(*index1)
+								self.render_buffer_box_bottom(index1)
 							));
 							middle[i + 4].push_str("         │                                         │");
 							middle[i + 5].push_str("         │                                         ▼");
@@ -262,18 +269,18 @@ impl<'a> Visualizer<'a> {
 						MiddleBuffer::Two(index1, index2) => {
 							middle[i + 1].push_str(&format!(
 								"{}                       {}",
-								self.render_buffer_box_top(*index1),
-								self.render_buffer_box_top(*index2)
+								self.render_buffer_box_top(index1),
+								self.render_buffer_box_top(index2)
 							));
 							middle[i + 2].push_str(&format!(
 								"{}                       {}",
-								self.render_buffer_box_middle(*index1),
-								self.render_buffer_box_middle(*index2)
+								self.render_buffer_box_middle(index1),
+								self.render_buffer_box_middle(index2)
 							));
 							middle[i + 3].push_str(&format!(
 								"{}                       {}",
-								self.render_buffer_box_bottom(*index1),
-								self.render_buffer_box_bottom(*index2)
+								self.render_buffer_box_bottom(index1),
+								self.render_buffer_box_bottom(index2)
 							));
 							middle[i + 4].push_str("         ▲                                         │");
 							middle[i + 5].push_str("         │                                         ▼");
@@ -285,7 +292,8 @@ impl<'a> Visualizer<'a> {
 		}
 
 		// BOTTOM
-		match &self.bottom {
+		let bottom_nodes = self.bottom.take();
+		match bottom_nodes {
 			None => {},
 			Some(b) => {
 				if b.len() < 3 {
@@ -306,7 +314,7 @@ impl<'a> Visualizer<'a> {
 					}
 				}
 
-				for index in b {
+				for index in &b {
 					bottom[0].push_str(&self.render_buffer_box_top(*index));
 					bottom[1].push_str(&self.render_buffer_box_middle(*index));
 					bottom[2].push_str(&self.render_buffer_box_bottom(*index));

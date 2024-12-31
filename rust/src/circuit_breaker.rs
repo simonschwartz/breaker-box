@@ -40,11 +40,17 @@ impl std::fmt::Display for State {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
+	/// Specify the capacity of the ring buffer.
 	pub buffer_size: usize,
+	/// Define the minimum number of events required in the buffer to evaluate the error rate.
 	pub min_eval_size: usize,
+	/// Set the error rate percentage that will trigger the circuit to open.
 	pub error_threshold: f32,
+	/// Specify the duration (in seconds) the circuit breaker remains open before transitioning to half-open.
 	pub retry_timeout: Duration,
+	/// Determine the duration (in seconds) each node/span in the buffer stores data.
 	pub buffer_span_duration: Duration,
+	/// Set the number of consecutive successes required to close a half-open circuit.
 	pub trial_success_required: usize,
 }
 
@@ -64,7 +70,6 @@ impl Default for Settings {
 #[derive(Debug, PartialEq)]
 pub struct CircuitBreaker {
 	buffer: RingBuffer,
-	started: Instant,
 	state: State,
 	trial_success: usize,
 	settings: Settings,
@@ -74,7 +79,6 @@ impl CircuitBreaker {
 	pub fn new(settings: Settings) -> Self {
 		Self {
 			buffer: RingBuffer::new(settings.buffer_size),
-			started: Instant::now(),
 			state: State::Closed,
 			trial_success: 0,
 			settings,
@@ -105,9 +109,9 @@ impl CircuitBreaker {
 		}
 
 		if input.is_ok() {
-			self.buffer.add_success();
+			self.buffer.add_success(self.settings.buffer_span_duration);
 		} else {
-			self.buffer.add_failure();
+			self.buffer.add_failure(self.settings.buffer_span_duration);
 		}
 	}
 
@@ -119,41 +123,20 @@ impl CircuitBreaker {
 				}
 			},
 			State::Closed => {
-				if self.buffer.has_exired(self.settings.buffer_span_duration) {
-					let error_rate = self.buffer.get_error_rate(self.settings.min_eval_size);
-					if self.state == State::Closed && error_rate > self.settings.error_threshold {
-						self.state = State::Open(Instant::now());
-					} else {
-						self.buffer.next();
-					}
-				}
+				let _ = self.buffer.get_cursor(self.settings.buffer_span_duration, Instant::now());
 			},
 			State::HalfOpen => {
 				if self.trial_success >= self.settings.trial_success_required {
 					self.trial_success = 0;
 					self.state = State::Closed;
-					self.buffer.next();
-					self.started = Instant::now();
+					self.buffer.reset_start_time();
 				}
 			},
 		}
 	}
 
-	fn get_active_buffer_node(&self) -> usize {
-		let now = Instant::now();
-		let elapsed = now.duration_since(self.started);
-		self.get_active_buffer_node_from_elapsed(elapsed)
-	}
-
-	fn get_active_buffer_node_from_elapsed(&self, elapsed: Duration) -> usize {
-		let spans_elapsed = elapsed.as_nanos() / self.settings.buffer_span_duration.as_nanos();
-		let index = spans_elapsed % (self.settings.buffer_size as u128);
-
-		index as usize
-	}
-
-	pub fn get_buffer(&self) -> &RingBuffer {
-		&self.buffer
+	pub fn get_buffer(&mut self) -> &mut RingBuffer {
+		&mut self.buffer
 	}
 
 	pub fn get_trial_success(&self) -> usize {
@@ -181,7 +164,7 @@ mod test {
 
 	#[test]
 	fn new_test() {
-		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_length(), 5);
+		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_buffer_size(), 5);
 		assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
 		assert_eq!(
 			CircuitBreaker::new(Settings {
@@ -189,7 +172,7 @@ mod test {
 				..Settings::default()
 			})
 			.buffer
-			.get_length(),
+			.get_buffer_size(),
 			10
 		);
 		assert_eq!(
@@ -227,23 +210,6 @@ mod test {
 	#[test]
 	fn evaluate_state_test() {
 		// TODO
-	}
-
-	#[test]
-	fn get_active_buffer_node_test() {
-		let cb = CircuitBreaker::new(Settings {
-			buffer_size: 10,
-			buffer_span_duration: Duration::from_secs(1),
-			..Settings::default()
-		});
-
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::ZERO), 0);
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_millis(999)), 0);
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(1)), 1);
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(9)), 9);
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(10)), 0);
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(99)), 9);
-		assert_eq!(cb.get_active_buffer_node_from_elapsed(Duration::from_secs(100)), 0);
 	}
 
 	#[test]

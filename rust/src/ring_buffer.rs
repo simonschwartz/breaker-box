@@ -2,7 +2,6 @@ use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Node {
-	created: Instant,
 	failure_count: usize,
 	success_count: usize,
 }
@@ -10,14 +9,12 @@ pub struct Node {
 impl Node {
 	pub fn new() -> Self {
 		Self {
-			created: Instant::now(),
 			failure_count: 0,
 			success_count: 0,
 		}
 	}
 
 	pub fn reset(&mut self) {
-		self.created = Instant::now();
 		self.failure_count = 0;
 		self.success_count = 0;
 	}
@@ -39,6 +36,8 @@ pub struct NodeInfo {
 pub struct RingBuffer {
 	cursor: usize,
 	nodes: Vec<Node>,
+	start_time: Instant,
+	last_record: Instant,
 }
 
 impl RingBuffer {
@@ -46,40 +45,52 @@ impl RingBuffer {
 		Self {
 			cursor: 0,
 			nodes: vec![Node::new(); elements],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
 		}
 	}
 
-	pub fn get_length(&self) -> usize {
+	pub fn reset_start_time(&mut self) {
+		self.start_time = Instant::now();
+		self.last_record = Instant::now();
+		self.cursor = self.cursor + 1 % self.get_buffer_size();
+	}
+
+	pub fn get_buffer_size(&self) -> usize {
 		self.nodes.len()
 	}
 
-	pub fn get_cursor(&self) -> usize {
+	pub fn get_cursor(&mut self, buffer_span_duration: Duration, now: Instant) -> usize {
+		let elapsed = now.duration_since(self.start_time);
+		let spans_elapsed = elapsed.as_nanos() / buffer_span_duration.as_nanos();
+		let index = (spans_elapsed + self.cursor as u128) % (self.get_buffer_size() as u128);
+		let new_cursor = index as usize;
+		let buffer_size = self.get_buffer_size();
+		let cursor_advancement = (new_cursor + 1 + buffer_size - self.cursor) % buffer_size;
+		for step in 2..cursor_advancement {
+			let skip_idx = (self.cursor + step) % buffer_size;
+			self.nodes[skip_idx].reset();
+		}
+		self.cursor = new_cursor;
 		self.cursor
 	}
 
-	pub fn add_failure(&mut self) {
-		self.nodes[self.cursor].failure_count += 1;
+	pub fn add_failure(&mut self, buffer_span_duration: Duration) {
+		let index = self.get_cursor(buffer_span_duration, Instant::now());
+		self.nodes[index].failure_count += 1;
+		self.last_record = Instant::now();
 	}
 
-	pub fn add_success(&mut self) {
-		self.nodes[self.cursor].success_count += 1;
+	pub fn add_success(&mut self, buffer_span_duration: Duration) {
+		let index = self.get_cursor(buffer_span_duration, Instant::now());
+		self.nodes[index].success_count += 1;
+		self.last_record = Instant::now();
 	}
 
-	pub fn has_exired(&self, timeout: Duration) -> bool {
-		self.nodes[self.cursor].created.elapsed() >= timeout
-	}
-
-	pub fn get_elapsed_time(&self) -> Duration {
-		self.nodes[self.cursor].created.elapsed()
-	}
-
-	pub fn next(&mut self) {
-		if self.cursor == self.nodes.len() - 1 {
-			self.cursor = 0;
-		} else {
-			self.cursor += 1;
-		}
-		self.nodes[self.cursor].reset();
+	pub fn get_elapsed_time(&self, buffer_span_duration: Duration, now: Instant) -> Duration {
+		let elapsed = now.duration_since(self.start_time);
+		let remainder_ns = elapsed.as_nanos() % buffer_span_duration.as_nanos();
+		Duration::from_nanos(remainder_ns as u64)
 	}
 
 	pub fn get_error_rate(&self, min_eval_size: usize) -> f32 {
@@ -128,153 +139,118 @@ mod test {
 	}
 
 	#[test]
-	fn get_length_test() {
-		assert_eq!(RingBuffer::new(1).get_length(), 1);
-		assert_eq!(RingBuffer::new(5).get_length(), 5);
-		assert_eq!(RingBuffer::new(100).get_length(), 100);
+	fn get_buffer_size_test() {
+		assert_eq!(RingBuffer::new(1).get_buffer_size(), 1);
+		assert_eq!(RingBuffer::new(5).get_buffer_size(), 5);
+		assert_eq!(RingBuffer::new(100).get_buffer_size(), 100);
 	}
 
 	#[test]
 	fn get_cursor_test() {
-		let mut buffer = RingBuffer::new(3);
-		assert_eq!(buffer.get_cursor(), 0);
-		buffer.next();
-		assert_eq!(buffer.get_cursor(), 1);
-		buffer.next();
-		assert_eq!(buffer.get_cursor(), 2);
-		buffer.next();
-		assert_eq!(buffer.get_cursor(), 0);
-		buffer.next();
-		assert_eq!(buffer.get_cursor(), 1);
+		let start_time = Instant::now();
+		let mut rb = RingBuffer {
+			cursor: 0,
+			nodes: vec![Node::new(); 10],
+			start_time,
+			last_record: start_time,
+		};
+
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(0)), 0);
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_millis(999)), 0);
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(1)), 1);
+		rb.cursor = 0;
+		rb.nodes[0].failure_count = 5;
+		rb.nodes[0].success_count = 7;
+		rb.nodes[1].failure_count = 666;
+		rb.nodes[1].success_count = 667;
+		rb.nodes[2].failure_count = 42;
+		rb.nodes[2].success_count = 666;
+		rb.nodes[3].failure_count = 99;
+		rb.nodes[3].success_count = 5;
+		rb.nodes[6].failure_count = 24;
+		rb.nodes[6].success_count = 7;
+		rb.nodes[7].failure_count = 666;
+		rb.nodes[7].success_count = 42;
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(6)), 6);
+		assert_eq!(rb.nodes[0].failure_count, 5);
+		assert_eq!(rb.nodes[0].success_count, 7);
+		assert_eq!(rb.nodes[1].failure_count, 666);
+		assert_eq!(rb.nodes[1].success_count, 667);
+		assert_eq!(
+			rb.nodes[2].failure_count
+				+ rb.nodes[2].success_count
+				+ rb.nodes[3].failure_count
+				+ rb.nodes[3].success_count
+				+ rb.nodes[6].failure_count
+				+ rb.nodes[6].success_count,
+			0
+		);
+		assert_eq!(rb.nodes[7].failure_count, 666);
+		assert_eq!(rb.nodes[7].success_count, 42);
+		rb.cursor = 0;
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(9)), 9);
+		rb.cursor = 0;
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(10)), 0);
+		rb.cursor = 0;
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(99)), 9);
+		rb.cursor = 0;
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(100)), 0);
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(9)), 9);
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(1)), 0);
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(4)), 4);
+		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(100)), 4);
 	}
 
 	#[test]
 	fn add_failure_success_test() {
 		let mut buffer = RingBuffer::new(1);
 
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.add_failure();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.add_success();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 1);
-		buffer.add_success();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 2);
-		buffer.add_failure();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 2);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 2);
-	}
-
-	#[test]
-	fn has_expired_test() {
-		let buffer = RingBuffer {
-			cursor: 0,
-			nodes: vec![Node {
-				created: Instant::now().checked_add(Duration::from_secs(10)).unwrap(),
-				failure_count: 0,
-				success_count: 0,
-			}],
-		};
-		assert_eq!(buffer.has_exired(Duration::from_secs(2)), false);
-
-		let buffer = RingBuffer {
-			cursor: 0,
-			nodes: vec![Node {
-				created: Instant::now().checked_sub(Duration::from_secs(100)).unwrap(),
-				failure_count: 0,
-				success_count: 0,
-			}],
-		};
-		assert_eq!(buffer.has_exired(Duration::from_secs(100)), true);
-
-		let buffer = RingBuffer {
-			cursor: 0,
-			nodes: vec![Node {
-				created: Instant::now(),
-				failure_count: 0,
-				success_count: 0,
-			}],
-		};
-		assert_eq!(buffer.has_exired(Duration::from_secs(10)), false);
-	}
-
-	#[test]
-	fn get_elapsed_test() {
-		let timeout = Instant::now().checked_sub(Duration::from_secs(100)).unwrap();
-		let buffer = RingBuffer {
-			cursor: 0,
-			nodes: vec![Node {
-				created: timeout,
-				failure_count: 0,
-				success_count: 0,
-			}],
-		};
-		assert_eq!(buffer.get_elapsed_time().as_secs(), timeout.elapsed().as_secs());
-	}
-
-	#[test]
-	fn next_test() {
-		let mut buffer = RingBuffer::new(3);
-		assert_eq!(buffer.cursor, 0);
-		buffer.next();
-		assert_eq!(buffer.cursor, 1);
-		buffer.next();
-		assert_eq!(buffer.cursor, 2);
-		buffer.next();
-		assert_eq!(buffer.cursor, 0);
-		buffer.next();
-		assert_eq!(buffer.cursor, 1);
-		buffer.next();
-		assert_eq!(buffer.cursor, 2);
-		buffer.next();
-		assert_eq!(buffer.cursor, 0);
-
-		let mut buffer = RingBuffer::new(1);
-		assert_eq!(buffer.cursor, 0);
-		buffer.next();
-		assert_eq!(buffer.cursor, 0);
-		buffer.next();
-		assert_eq!(buffer.cursor, 0);
-		buffer.next();
-		assert_eq!(buffer.cursor, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_failure(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_success(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
+		buffer.add_success(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
+		buffer.add_failure(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
 	}
 
 	#[test]
 	fn next_add_failure_success_test() {
 		let mut buffer = RingBuffer::new(3);
 		assert_eq!(buffer.cursor, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.add_failure();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.add_failure();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 2);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.next();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.add_success();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 1);
-		buffer.add_success();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 2);
-		buffer.next();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
-		buffer.add_success();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 1);
-		buffer.add_failure();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 1);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 1);
-		buffer.next();
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).failure_count, 0);
-		assert_eq!(buffer.get_node_info(buffer.get_cursor()).success_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_failure(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_failure(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 2);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.cursor += 1;
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_success(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
+		buffer.add_success(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
+		buffer.cursor += 1;
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_success(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
+		buffer.add_failure(Duration::from_secs(10));
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
 	}
 
 	#[test]
@@ -283,16 +259,16 @@ mod test {
 			cursor: 0,
 			nodes: vec![
 				Node {
-					created: Instant::now(),
 					failure_count: 50,
 					success_count: 50,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 0,
 					success_count: 0,
 				},
 			],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
 		};
 		assert_eq!(buffer.get_error_rate(10), 0.0); // cursor on first node
 
@@ -300,16 +276,16 @@ mod test {
 			cursor: 1,
 			nodes: vec![
 				Node {
-					created: Instant::now(),
 					failure_count: 50,
 					success_count: 50,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 0,
 					success_count: 0,
 				},
 			],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
 		};
 		assert_eq!(buffer.get_error_rate(10), 50.0); // 50 of 100 = 50%
 
@@ -317,21 +293,20 @@ mod test {
 			cursor: 0,
 			nodes: vec![
 				Node {
-					created: Instant::now(),
 					failure_count: 0,
 					success_count: 0,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 50,
 					success_count: 50,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 10,
 					success_count: 90,
 				},
 			],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
 		};
 		assert_eq!(buffer.get_error_rate(10), 30.0); // 60 of 200 = 30%
 
@@ -339,21 +314,20 @@ mod test {
 			cursor: 0,
 			nodes: vec![
 				Node {
-					created: Instant::now(),
 					failure_count: 0,
 					success_count: 0,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 5,
 					success_count: 5,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 1,
 					success_count: 9,
 				},
 			],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
 		};
 		assert_eq!(buffer.get_error_rate(100), 0.0); // 6 of 20 = 30% but less than min_eval_size
 	}
@@ -364,21 +338,20 @@ mod test {
 			cursor: 0,
 			nodes: vec![
 				Node {
-					created: Instant::now(),
 					failure_count: 42,
 					success_count: 666,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 0,
 					success_count: 42,
 				},
 				Node {
-					created: Instant::now(),
 					failure_count: 256,
 					success_count: 0,
 				},
 			],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
 		};
 
 		assert_eq!(
