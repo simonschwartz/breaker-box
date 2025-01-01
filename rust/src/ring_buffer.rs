@@ -254,6 +254,37 @@ mod test {
 	}
 
 	#[test]
+	fn get_elapsed_time_test() {
+		let timeout = Instant::now();
+		let buffer = RingBuffer {
+			cursor: 0,
+			nodes: vec![Node {
+				failure_count: 0,
+				success_count: 0,
+			}],
+			start_time: timeout,
+			last_record: timeout,
+		};
+
+		assert_eq!(
+			buffer.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(1)),
+			Duration::from_secs(1)
+		);
+		assert_eq!(
+			buffer.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(4)),
+			Duration::from_secs(4)
+		);
+		assert_eq!(
+			buffer.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(5)),
+			Duration::from_secs(0)
+		);
+		assert_eq!(
+			buffer.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(6)),
+			Duration::from_secs(1)
+		);
+	}
+
+	#[test]
 	fn get_error_rate_test() {
 		let buffer = RingBuffer {
 			cursor: 0,
