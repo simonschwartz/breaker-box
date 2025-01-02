@@ -227,8 +227,7 @@ impl<'a> Visualizer<'a> {
 		}
 
 		// MIDDLE
-		let middle_nodes = self.middle.take();
-		match middle_nodes {
+		match self.middle.clone() {
 			None => {
 				if self.bottom.is_some() {
 					middle[0].push_str("         ▲                                         │");
@@ -292,8 +291,7 @@ impl<'a> Visualizer<'a> {
 		}
 
 		// BOTTOM
-		let bottom_nodes = self.bottom.take();
-		match bottom_nodes {
+		match self.bottom.clone() {
 			None => {},
 			Some(b) => {
 				if b.len() < 3 {
