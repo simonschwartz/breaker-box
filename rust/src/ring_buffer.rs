@@ -52,23 +52,27 @@ impl RingBuffer {
 
 	pub fn reset_start_time(&mut self) {
 		self.start_time = Instant::now();
-		self.last_record = Instant::now();
-		self.cursor = self.cursor + 1 % self.get_buffer_size();
+		self.last_record = Instant::now(); // TODO: implement the cleaning of nodes we skipped
+		self.cursor += 1 % self.get_buffer_size();
 	}
 
 	pub fn get_buffer_size(&self) -> usize {
 		self.nodes.len()
 	}
 
-	pub fn get_cursor(&mut self, buffer_span_duration: Duration, now: Instant) -> usize {
-		let elapsed = now.duration_since(self.start_time);
+	fn get_elapsed_since(&self, now: Instant, buffer_span_duration: Duration, timespan: Instant) -> usize {
+		let elapsed = now.duration_since(timespan);
 		let spans_elapsed = elapsed.as_nanos() / buffer_span_duration.as_nanos();
-		let index = (spans_elapsed + self.cursor as u128) % (self.get_buffer_size() as u128);
-		let new_cursor = index as usize;
-		let buffer_size = self.get_buffer_size();
-		let cursor_advancement = (new_cursor + 1 + buffer_size - self.cursor) % buffer_size;
-		for step in 2..cursor_advancement {
-			let skip_idx = (self.cursor + step) % buffer_size;
+		let index = spans_elapsed % (self.get_buffer_size() as u128);
+		index as usize
+	}
+
+	pub fn get_cursor(&mut self, buffer_span_duration: Duration, now: Instant) -> usize {
+		let new_cursor = self.get_elapsed_since(now, buffer_span_duration, self.start_time);
+		let skipped_cursor = self.get_elapsed_since(now, buffer_span_duration, self.last_record);
+
+		for idx in self.cursor + 1..self.cursor + 1 + skipped_cursor {
+			let skip_idx = idx % self.get_buffer_size();
 			self.nodes[skip_idx].reset();
 		}
 		self.cursor = new_cursor;
@@ -154,11 +158,14 @@ mod test {
 			start_time,
 			last_record: start_time,
 		};
+		let buffer_span_duration = Duration::from_secs(1);
 
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(0)), 0);
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_millis(999)), 0);
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(1)), 1);
-		rb.cursor = 0;
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(0)), 0);
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(999)), 0);
+
+		// we are pretending something has been recorded into the second node
+		// Node 1 => Node 1
+		rb.last_record = start_time + Duration::from_millis(1000);
 		rb.nodes[0].failure_count = 5;
 		rb.nodes[0].success_count = 7;
 		rb.nodes[1].failure_count = 666;
@@ -167,38 +174,118 @@ mod test {
 		rb.nodes[2].success_count = 666;
 		rb.nodes[3].failure_count = 99;
 		rb.nodes[3].success_count = 5;
+		rb.nodes[5].failure_count = 999;
+		rb.nodes[5].success_count = 999;
+		rb.nodes[4].failure_count = 999;
+		rb.nodes[4].success_count = 999;
 		rb.nodes[6].failure_count = 24;
 		rb.nodes[6].success_count = 7;
 		rb.nodes[7].failure_count = 666;
 		rb.nodes[7].success_count = 42;
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(6)), 6);
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1000)), 1);
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1000)), 1); // duplicate to make sure we are deterministic
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1001)), 1);
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1002)), 1);
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1003)), 1);
+
+		// now we skip to node 6 and see if only the skipped nodes were reset
+		// Node 1 => Node 6
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(6)), 6);
 		assert_eq!(rb.nodes[0].failure_count, 5);
 		assert_eq!(rb.nodes[0].success_count, 7);
 		assert_eq!(rb.nodes[1].failure_count, 666);
 		assert_eq!(rb.nodes[1].success_count, 667);
-		assert_eq!(
-			rb.nodes[2].failure_count
-				+ rb.nodes[2].success_count
-				+ rb.nodes[3].failure_count
-				+ rb.nodes[3].success_count
-				+ rb.nodes[6].failure_count
-				+ rb.nodes[6].success_count,
-			0
-		);
+		assert_eq!(rb.nodes[2].failure_count, 0);
+		assert_eq!(rb.nodes[2].success_count, 0);
+		assert_eq!(rb.nodes[3].failure_count, 0);
+		assert_eq!(rb.nodes[3].success_count, 0);
+		assert_eq!(rb.nodes[4].failure_count, 0);
+		assert_eq!(rb.nodes[4].success_count, 0);
+		assert_eq!(rb.nodes[5].failure_count, 0);
+		assert_eq!(rb.nodes[5].success_count, 0);
+		assert_eq!(rb.nodes[6].failure_count, 0);
+		assert_eq!(rb.nodes[6].success_count, 0);
 		assert_eq!(rb.nodes[7].failure_count, 666);
 		assert_eq!(rb.nodes[7].success_count, 42);
-		rb.cursor = 0;
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(9)), 9);
-		rb.cursor = 0;
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(10)), 0);
-		rb.cursor = 0;
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(99)), 9);
-		rb.cursor = 0;
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(100)), 0);
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(9)), 9);
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(1)), 0);
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(4)), 4);
-		assert_eq!(rb.get_cursor(Duration::from_secs(1), start_time + Duration::from_secs(100)), 4);
+
+		// we record something into node 6 and fill up the buffer
+		rb.last_record = start_time + Duration::from_millis(6000);
+		rb.nodes[6].failure_count = 5;
+		rb.nodes[6].success_count = 5;
+		rb.nodes[7].failure_count = 5;
+		rb.nodes[7].success_count = 5;
+		rb.nodes[8].failure_count = 5;
+		rb.nodes[8].success_count = 5;
+		rb.nodes[9].failure_count = 5;
+		rb.nodes[9].success_count = 5;
+
+		// now we skip to node 8 and check the skipped nodes that needed to be reset
+		// Node 6 => Node 8
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(8)), 8);
+		assert_eq!(rb.nodes[6].failure_count, 5);
+		assert_eq!(rb.nodes[6].success_count, 5);
+		assert_eq!(rb.nodes[7].failure_count, 0);
+		assert_eq!(rb.nodes[7].success_count, 0);
+		assert_eq!(rb.nodes[8].failure_count, 0);
+		assert_eq!(rb.nodes[8].success_count, 0);
+		assert_eq!(rb.nodes[9].failure_count, 5);
+		assert_eq!(rb.nodes[9].success_count, 5);
+
+		rb.nodes[0].failure_count = 5;
+		rb.nodes[0].success_count = 5;
+		rb.nodes[1].failure_count = 5;
+		rb.nodes[1].success_count = 5;
+		rb.nodes[2].failure_count = 5;
+		rb.nodes[2].success_count = 5;
+		rb.nodes[3].failure_count = 5;
+		rb.nodes[3].success_count = 5;
+		rb.nodes[4].failure_count = 5;
+		rb.nodes[4].success_count = 5;
+		rb.nodes[5].failure_count = 5;
+		rb.nodes[5].success_count = 5;
+
+		// now we skip five buffer durations ahead and test that the ring buffer went in a circle
+		// Node 9 => Node 4
+		rb.last_record = start_time + Duration::from_millis(8000);
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(14)), 4);
+		assert_eq!(rb.nodes[9].failure_count, 0);
+		assert_eq!(rb.nodes[9].success_count, 0);
+		assert_eq!(rb.nodes[0].failure_count, 0);
+		assert_eq!(rb.nodes[0].success_count, 0);
+		assert_eq!(rb.nodes[1].failure_count, 0);
+		assert_eq!(rb.nodes[1].success_count, 0);
+		assert_eq!(rb.nodes[2].failure_count, 0);
+		assert_eq!(rb.nodes[2].success_count, 0);
+		assert_eq!(rb.nodes[3].failure_count, 0);
+		assert_eq!(rb.nodes[3].success_count, 0);
+		assert_eq!(rb.nodes[4].failure_count, 0);
+		assert_eq!(rb.nodes[4].success_count, 0);
+		assert_eq!(rb.nodes[5].failure_count, 5);
+		assert_eq!(rb.nodes[5].success_count, 5);
+
+		// and lastely we skip a bunch of time ahead that is more than a couple round trips around the ring buffer
+		// and make sure everything was reset
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(605)), 5);
+		assert_eq!(rb.nodes[0].failure_count, 0);
+		assert_eq!(rb.nodes[0].success_count, 0);
+		assert_eq!(rb.nodes[1].failure_count, 0);
+		assert_eq!(rb.nodes[1].success_count, 0);
+		assert_eq!(rb.nodes[2].failure_count, 0);
+		assert_eq!(rb.nodes[2].success_count, 0);
+		assert_eq!(rb.nodes[3].failure_count, 0);
+		assert_eq!(rb.nodes[3].success_count, 0);
+		assert_eq!(rb.nodes[4].failure_count, 0);
+		assert_eq!(rb.nodes[4].success_count, 0);
+		assert_eq!(rb.nodes[5].failure_count, 0);
+		assert_eq!(rb.nodes[5].success_count, 0);
+		assert_eq!(rb.nodes[6].failure_count, 0);
+		assert_eq!(rb.nodes[6].success_count, 0);
+		assert_eq!(rb.nodes[7].failure_count, 0);
+		assert_eq!(rb.nodes[7].success_count, 0);
+		assert_eq!(rb.nodes[8].failure_count, 0);
+		assert_eq!(rb.nodes[8].success_count, 0);
+		assert_eq!(rb.nodes[9].failure_count, 0);
+		assert_eq!(rb.nodes[9].success_count, 0);
 	}
 
 	#[test]
@@ -223,34 +310,78 @@ mod test {
 
 	#[test]
 	fn next_add_failure_success_test() {
-		let mut buffer = RingBuffer::new(3);
+		let mut buffer = RingBuffer::new(5);
+		let buffer_span_duration = Duration::from_secs(10);
+
+		// we start with the cursor pointing to node 0 and make sure we count each success and failure
+		let _ = buffer.get_cursor(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.cursor, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_failure(Duration::from_secs(10));
+		buffer.add_failure(buffer_span_duration);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_failure(Duration::from_secs(10));
+		buffer.add_failure(buffer_span_duration);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 2);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.cursor += 1;
+
+		// now we skip forward in time to check the next node
+		buffer.start_time = Instant::now() - (buffer_span_duration * 1) - Duration::from_secs(1);
+		// we check the cursor to make sure we evaluate the state
+		// calling `add_success` or `add_failure` will check the cursor automatically
+		let _ = buffer.get_cursor(buffer_span_duration, Instant::now());
+
+		assert_eq!(buffer.get_node_info(0).failure_count, 2); // we retained the data of old nodes
+		assert_eq!(buffer.get_node_info(0).success_count, 0);
+		assert_eq!(buffer.cursor, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_success(Duration::from_secs(10));
+		buffer.add_success(buffer_span_duration);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
-		buffer.add_success(Duration::from_secs(10));
+		buffer.add_success(buffer_span_duration);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
-		buffer.cursor += 1;
+
+		// now we skip ahead again to make sure we get to a new node
+		buffer.start_time = Instant::now() - (buffer_span_duration * 2) - Duration::from_secs(1);
+		let _ = buffer.get_cursor(buffer_span_duration, Instant::now());
+
+		assert_eq!(buffer.get_node_info(0).failure_count, 2);
+		assert_eq!(buffer.get_node_info(0).success_count, 0);
+		assert_eq!(buffer.get_node_info(1).failure_count, 0);
+		assert_eq!(buffer.get_node_info(1).success_count, 2);
+		assert_eq!(buffer.cursor, 2);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_success(Duration::from_secs(10));
+		buffer.add_success(buffer_span_duration);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
-		buffer.add_failure(Duration::from_secs(10));
+		buffer.add_failure(buffer_span_duration);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
+
+		// this time we skip one node and populate the skipped node with data to make sure we clear skipped nodes
+		buffer.start_time = Instant::now() - (buffer_span_duration * 4) - Duration::from_secs(1);
+		buffer.last_record = Instant::now() - (buffer_span_duration * 1) - Duration::from_secs(1);
+		buffer.nodes[3].failure_count = 42;
+		buffer.nodes[3].success_count = 666;
+		let _ = buffer.get_cursor(buffer_span_duration, Instant::now());
+
+		assert_eq!(buffer.get_node_info(0).failure_count, 2);
+		assert_eq!(buffer.get_node_info(0).success_count, 0);
+		assert_eq!(buffer.get_node_info(1).failure_count, 0);
+		assert_eq!(buffer.get_node_info(1).success_count, 2);
+		assert_eq!(buffer.get_node_info(2).failure_count, 1);
+		assert_eq!(buffer.get_node_info(2).success_count, 1);
+		assert_eq!(buffer.get_node_info(3).failure_count, 0); // reset because it was skipped
+		assert_eq!(buffer.get_node_info(3).success_count, 0); // reset because it was skipped
+		assert_eq!(buffer.cursor, 4);
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
+		buffer.add_failure(buffer_span_duration);
+		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
+		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
 	}
 
 	#[test]
