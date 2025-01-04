@@ -22,9 +22,11 @@ fn main() {
 		return;
 	}
 
+	let no_auto_play = args.contains(&String::from("-a")) || args.contains(&String::from("--noautoplay"));
+
 	let settings = cli_args::parse_args(args);
 	let mut cb = circuit_breaker::CircuitBreaker::new(settings);
 
 	let mut vis = visualizer::Visualizer::new(&mut cb);
-	let _ = vis.start();
+	let _ = vis.start(!no_auto_play);
 }

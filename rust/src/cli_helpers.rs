@@ -27,6 +27,8 @@ Options:
                                        node/span in the buffer stores data.
   -t, --trial_success_required NUMBER  Set the number of consecutive successes
                                        required to close a half-open circuit.
+  -a, --noautoplay                     Don't auto-play the visualizer and
+                                       refresh every second.
   -h, --help                           Display this help message and exit.
   -v, --version                        Display version information and exit.
 	"#

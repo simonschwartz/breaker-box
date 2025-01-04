@@ -335,7 +335,7 @@ impl<'a> Visualizer<'a> {
 		output
 	}
 
-	pub fn start(&mut self) -> io::Result<()> {
+	pub fn start(&mut self, periodically: bool) -> io::Result<()> {
 		#[cfg(target_os = "windows")]
 		compile_error!(
 			"Windows is not supported for the visualizer due to the lack of raw mode. Use WSL to make it compile!"
@@ -388,7 +388,7 @@ impl<'a> Visualizer<'a> {
 				}
 			}
 
-			if last_tick.elapsed() >= Duration::from_secs(1) {
+			if periodically && last_tick.elapsed() >= Duration::from_secs(1) {
 				print!("{reset_pos}{}", self.render::<(), &str>(None));
 				last_tick = Instant::now();
 			}
