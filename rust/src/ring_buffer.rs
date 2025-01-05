@@ -52,7 +52,7 @@ impl RingBuffer {
 
 	pub fn reset_start_time(&mut self) {
 		self.start_time = Instant::now();
-		self.last_record = Instant::now(); // TODO: implement the cleaning of nodes we skipped
+		self.last_record = Instant::now();
 		self.cursor += 1 % self.get_buffer_size();
 	}
 
