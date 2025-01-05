@@ -40,18 +40,18 @@ const (
 	Failure Result = iota
 )
 
-type Cursor struct {
-	Expires    time.Time
-	ErrorCount int
-	TotalCount int
-}
-
 type CircuitBreaker struct {
 	mu        sync.RWMutex
 	state     State
 	buffer    *RingBuffer
 	errorRate float64
 	time      ITime
+
+	// time based scheduler for advancing the ring buffer at regular intervals
+	cursorScheduler *Scheduler
+
+	// schedules the timing for transitioning from Open to HalfOpen state
+	retryScheduler *Scheduler
 
 	// duration of data each node/span in the buffer stores
 	spanDuration time.Duration
@@ -64,9 +64,6 @@ type CircuitBreaker struct {
 
 	// duration the circuit breaker remains in the Open state before transitioning to HalfOpen.
 	retryTimeout time.Duration
-
-	// timestamp for when to transition from Open state to HalfOpen
-	retryAfter time.Time
 
 	// how many successive successes required to close a half open circuit
 	trialSuccessesRequired int
@@ -81,12 +78,17 @@ type Builder struct {
 
 type ITime interface {
 	Now() time.Time
+	NewTicker(d time.Duration) *time.Ticker
 }
 
 type Time struct{}
 
 func (Time) Now() time.Time {
 	return time.Now()
+}
+
+func (Time) NewTicker(d time.Duration) *time.Ticker {
+	return time.NewTicker(d)
 }
 
 // UNSAFE - only intended for use by internal testing tools
@@ -177,6 +179,18 @@ func (b *Builder) SetTrialSuccessesRequired(number int) *Builder {
 }
 
 func (b *Builder) Build() *CircuitBreaker {
+	b.cb.cursorScheduler = NewScheduler(b.cb.time, b.cb.spanDuration, b.cb.moveCursor)
+	b.cb.retryScheduler = NewScheduler(b.cb.time, b.cb.retryTimeout, func() {
+		b.cb.mu.Lock()
+		defer b.cb.mu.Unlock()
+
+		b.cb.state = HalfOpen
+		b.cb.retryScheduler.Stop()
+	})
+
+	b.cb.cursorScheduler.Start()
+	b.cb.buffer.Cursor().Reset(b.cb.time.Now().Add(b.cb.spanDuration))
+
 	return b.cb
 }
 
@@ -196,20 +210,33 @@ func New() *Builder {
 	}
 }
 
+func (cb *CircuitBreaker) moveCursor() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+
+	cb.buffer.Next()
+	cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
+	cb.errorRate = cb.buffer.GetErrorRate(cb.minEvalSize)
+
+	if cb.state == Closed && cb.errorRate > cb.errorThreshold {
+		cb.state = Open
+		cb.buffer.ClearBuffer()
+		cb.errorRate = 0.00
+		cb.cursorScheduler.Stop()
+		cb.retryScheduler.Start()
+	}
+}
+
 func (cb *CircuitBreaker) GetState() State {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
-
-	if cb.state == Open && cb.retryAfter.Before(cb.time.Now()) {
-		cb.state = HalfOpen
-	}
 
 	return cb.state
 }
 
 func (cb *CircuitBreaker) Record(result Result) {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 
 	if cb.state == Open {
 		return
@@ -221,6 +248,9 @@ func (cb *CircuitBreaker) Record(result Result) {
 		cb.trialSuccesses++
 		if cb.trialSuccesses >= cb.trialSuccessesRequired {
 			cb.state = Closed
+			cb.trialSuccesses = 0
+			cb.cursorScheduler.Start()
+			cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
 		}
 		return
 	}
@@ -230,26 +260,8 @@ func (cb *CircuitBreaker) Record(result Result) {
 	if cb.state == HalfOpen && result == Failure {
 		cb.state = Open
 		cb.trialSuccesses = 0
-		cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
+		cb.retryScheduler.Start()
 		return
-	}
-
-	if cb.buffer.Cursor().Expires.IsZero() {
-		cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
-	}
-
-	if cb.buffer.Cursor().Expires.Before(cb.time.Now()) {
-		cb.buffer.Next()
-		cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
-		cb.errorRate = cb.buffer.GetErrorRate(cb.minEvalSize)
-	}
-
-	// If the error rate exceeds the threshold, set the circuit breaker to Open
-	if cb.state == Closed && cb.errorRate > cb.errorThreshold {
-		cb.state = Open
-		cb.retryAfter = cb.time.Now().Add(cb.retryTimeout)
-		cb.buffer.ClearBuffer()
-		cb.errorRate = 0.00
 	}
 
 	if result == Failure {
@@ -260,5 +272,8 @@ func (cb *CircuitBreaker) Record(result Result) {
 }
 
 func (cb *CircuitBreaker) GetErrorRate() float64 {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+
 	return cb.errorRate
 }
