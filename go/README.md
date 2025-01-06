@@ -29,3 +29,19 @@ func VeryImportant() (*CriticalData, error) {
     }
 }
 ```
+
+### Benchmarks
+
+Run benchmarks on the critical circuit breaker methods:
+
+```
+make bench
+```
+
+This includes the GetState() method for checking circuit breaker state, and Record() for handling incoming events.
+
+Run extended benchmarks(30 seconds) that simulate real-world usage:
+
+```
+make bench-integration
+```

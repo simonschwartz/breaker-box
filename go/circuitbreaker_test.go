@@ -131,7 +131,7 @@ func TestCircuitBreaker(t *testing.T) {
 	assert(t, circuitbreaker.Closed, state)
 }
 
-// Benchmarks - go test src/pkg/circuitbreaker/circuitbreaker_test.go -bench=BenchmarkCircuitBreakerRecord -benchtime=5s
+// Record() is the most frequently used method in the Circuit Breaker
 func BenchmarkCircuitBreakerRecord(b *testing.B) {
 	cb := circuitbreaker.New().Build()
 
@@ -151,6 +151,7 @@ func BenchmarkCircuitBreakerRecord(b *testing.B) {
 	}
 }
 
+// GetState() may be frequently used by consumers to determine if they will defer sending traffic to a unavailable service
 func BenchmarkCircuitGetState(b *testing.B) {
 	cb := circuitbreaker.New().Build()
 
@@ -158,5 +159,33 @@ func BenchmarkCircuitGetState(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		cb.GetState()
+	}
+}
+
+// This is the recommended way to integrate the circuit breaker
+func BenchmarkCircuitBreaker(b *testing.B) {
+	cb := circuitbreaker.
+		New().
+		SetEvalWindow(1, 6).
+		SetErrorThreshold(20.0).
+		Build()
+
+	isErrors := make([]bool, b.N)
+	for i := 0; i < b.N; i++ {
+		isErrors[i] = rand.Float32() < 0.1
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		state := cb.GetState()
+
+		if state != circuitbreaker.Open {
+			if isErrors[i] {
+				cb.Record(circuitbreaker.Failure)
+			} else {
+				cb.Record(circuitbreaker.Success)
+			}
+		}
 	}
 }
