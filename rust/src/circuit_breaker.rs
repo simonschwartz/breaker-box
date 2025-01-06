@@ -109,9 +109,9 @@ impl CircuitBreaker {
 		}
 
 		if input.is_ok() {
-			self.buffer.add_success(self.settings.buffer_span_duration);
+			self.buffer.add_success(self.settings.buffer_span_duration, Instant::now());
 		} else {
-			self.buffer.add_failure(self.settings.buffer_span_duration);
+			self.buffer.add_failure(self.settings.buffer_span_duration, Instant::now());
 		}
 	}
 
@@ -277,6 +277,44 @@ mod test {
 		assert_eq!(cb.trial_success, 2);
 		cb.record::<(), &str>(Err(""));
 		assert!(matches!(cb.state, State::Open(_)));
+	}
+
+	#[test]
+	fn record_timed_test() {
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_span_duration: Duration::from_secs(1),
+			..Settings::default()
+		});
+
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(Duration::from_secs(1));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(Duration::from_secs(1));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(Duration::from_secs(1));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(Duration::from_secs(1));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+
+		// We skip 3 nodes ahead
+		std::thread::sleep(Duration::from_secs(3));
+		cb.evaluate_state();
+
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 0); // skipped
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 0); // skipped
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 0); // current
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 3);
 	}
 
 	#[test]

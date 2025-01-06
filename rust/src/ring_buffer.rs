@@ -60,35 +60,45 @@ impl RingBuffer {
 		self.nodes.len()
 	}
 
-	fn get_elapsed_since(&self, now: Instant, buffer_span_duration: Duration, timespan: Instant) -> usize {
+	fn get_index_elapsed_since(&self, now: Instant, buffer_span_duration: Duration, timespan: Instant) -> (usize, usize) {
 		let elapsed = now.duration_since(timespan);
 		let spans_elapsed = elapsed.as_nanos() / buffer_span_duration.as_nanos();
 		let index = spans_elapsed % (self.get_buffer_size() as u128);
-		index as usize
+		(index as usize, spans_elapsed as usize)
 	}
 
 	pub fn get_cursor(&mut self, buffer_span_duration: Duration, now: Instant) -> usize {
-		let new_cursor = self.get_elapsed_since(now, buffer_span_duration, self.start_time);
-		let skipped_cursor = self.get_elapsed_since(now, buffer_span_duration, self.last_record);
+		let (new_cursor, _) = self.get_index_elapsed_since(now, buffer_span_duration, self.start_time);
+		let (_, spans_elapsed) = self.get_index_elapsed_since(now, buffer_span_duration, self.last_record);
 
-		for idx in self.cursor + 1..self.cursor + 1 + skipped_cursor {
+		let mut start = self.cursor + 1;
+		let mut end = self.cursor + 1 + spans_elapsed;
+		if spans_elapsed >= self.get_buffer_size() {
+			start = 0;
+			end = self.get_buffer_size();
+		}
+
+		// leaving here for debugging
+		// dbg!(self.cursor, new_cursor, start, end, spans_elapsed);
+		for idx in start..end {
 			let skip_idx = idx % self.get_buffer_size();
+			// dbg!(skip_idx);
 			self.nodes[skip_idx].reset();
 		}
 		self.cursor = new_cursor;
 		self.cursor
 	}
 
-	pub fn add_failure(&mut self, buffer_span_duration: Duration) {
-		let index = self.get_cursor(buffer_span_duration, Instant::now());
+	pub fn add_failure(&mut self, buffer_span_duration: Duration, now: Instant) {
+		let index = self.get_cursor(buffer_span_duration, now);
 		self.nodes[index].failure_count += 1;
-		self.last_record = Instant::now();
+		self.last_record = now;
 	}
 
-	pub fn add_success(&mut self, buffer_span_duration: Duration) {
-		let index = self.get_cursor(buffer_span_duration, Instant::now());
+	pub fn add_success(&mut self, buffer_span_duration: Duration, now: Instant) {
+		let index = self.get_cursor(buffer_span_duration, now);
 		self.nodes[index].success_count += 1;
-		self.last_record = Instant::now();
+		self.last_record = now;
 	}
 
 	pub fn get_elapsed_time(&self, buffer_span_duration: Duration, now: Instant) -> Duration {
@@ -147,6 +157,80 @@ mod test {
 		assert_eq!(RingBuffer::new(1).get_buffer_size(), 1);
 		assert_eq!(RingBuffer::new(5).get_buffer_size(), 5);
 		assert_eq!(RingBuffer::new(100).get_buffer_size(), 100);
+	}
+
+	#[test]
+	fn get_cursor_skip_test() {
+		let start_time = Instant::now();
+		let mut rb = RingBuffer {
+			cursor: 0,
+			nodes: vec![Node::new(); 4],
+			start_time,
+			last_record: start_time,
+		};
+		let buffer_span_duration = Duration::from_secs(1);
+
+		rb.nodes[0].failure_count = 5;
+		rb.nodes[0].success_count = 5;
+		rb.nodes[1].failure_count = 5;
+		rb.nodes[1].success_count = 5;
+		rb.nodes[2].failure_count = 5;
+		rb.nodes[2].success_count = 5;
+		rb.nodes[3].failure_count = 5;
+		rb.nodes[3].success_count = 5;
+
+		// We skip to the 3rd node
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(2)), 2);
+
+		assert_eq!(rb.nodes[0].failure_count, 5);
+		assert_eq!(rb.nodes[0].success_count, 5);
+		assert_eq!(rb.nodes[1].failure_count, 0); // skipped
+		assert_eq!(rb.nodes[1].success_count, 0); // skipped
+		assert_eq!(rb.nodes[2].failure_count, 0); // current
+		assert_eq!(rb.nodes[2].success_count, 0); // current
+		assert_eq!(rb.nodes[3].failure_count, 5);
+		assert_eq!(rb.nodes[3].success_count, 5);
+	}
+
+	#[test]
+	fn get_cursor_timed_test() {
+		let mut rb = RingBuffer {
+			cursor: 0,
+			nodes: vec![Node::new(); 5],
+			start_time: Instant::now(),
+			last_record: Instant::now(),
+		};
+		let buffer_span_duration = Duration::from_secs(1);
+
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		std::thread::sleep(Duration::from_secs(1));
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		std::thread::sleep(Duration::from_secs(1));
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		std::thread::sleep(Duration::from_secs(1));
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		std::thread::sleep(Duration::from_secs(1));
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+		rb.add_success(buffer_span_duration, Instant::now());
+
+		// We skip 3 nodes ahead
+		std::thread::sleep(Duration::from_secs(2));
+		assert_eq!(rb.get_cursor(buffer_span_duration, Instant::now()), 1);
+
+		assert_eq!(rb.nodes[0].success_count, 0); // skipped
+		assert_eq!(rb.nodes[1].success_count, 0); // current
+		assert_eq!(rb.nodes[2].success_count, 3);
+		assert_eq!(rb.nodes[3].success_count, 3);
+		assert_eq!(rb.nodes[4].success_count, 3);
 	}
 
 	#[test]
@@ -263,6 +347,27 @@ mod test {
 		assert_eq!(rb.nodes[5].failure_count, 5);
 		assert_eq!(rb.nodes[5].success_count, 5);
 
+		rb.nodes[0].failure_count = 5;
+		rb.nodes[0].success_count = 5;
+		rb.nodes[1].failure_count = 5;
+		rb.nodes[1].success_count = 5;
+		rb.nodes[2].failure_count = 5;
+		rb.nodes[2].success_count = 5;
+		rb.nodes[3].failure_count = 5;
+		rb.nodes[3].success_count = 5;
+		rb.nodes[4].failure_count = 5;
+		rb.nodes[4].success_count = 5;
+		rb.nodes[5].failure_count = 5;
+		rb.nodes[5].success_count = 5;
+		rb.nodes[6].failure_count = 5;
+		rb.nodes[6].success_count = 5;
+		rb.nodes[7].failure_count = 5;
+		rb.nodes[7].success_count = 5;
+		rb.nodes[8].failure_count = 5;
+		rb.nodes[8].success_count = 5;
+		rb.nodes[9].failure_count = 5;
+		rb.nodes[9].success_count = 5;
+
 		// and lastely we skip a bunch of time ahead that is more than a couple round trips around the ring buffer
 		// and make sure everything was reset
 		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(605)), 5);
@@ -294,16 +399,16 @@ mod test {
 
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_failure(Duration::from_secs(10));
+		buffer.add_failure(Duration::from_secs(10), Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_success(Duration::from_secs(10));
+		buffer.add_success(Duration::from_secs(10), Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
-		buffer.add_success(Duration::from_secs(10));
+		buffer.add_success(Duration::from_secs(10), Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
-		buffer.add_failure(Duration::from_secs(10));
+		buffer.add_failure(Duration::from_secs(10), Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 2);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
 	}
@@ -318,10 +423,10 @@ mod test {
 		assert_eq!(buffer.cursor, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_failure(buffer_span_duration);
+		buffer.add_failure(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_failure(buffer_span_duration);
+		buffer.add_failure(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 2);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
 
@@ -336,10 +441,10 @@ mod test {
 		assert_eq!(buffer.cursor, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_success(buffer_span_duration);
+		buffer.add_success(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
-		buffer.add_success(buffer_span_duration);
+		buffer.add_success(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 2);
 
@@ -354,10 +459,10 @@ mod test {
 		assert_eq!(buffer.cursor, 2);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_success(buffer_span_duration);
+		buffer.add_success(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
-		buffer.add_failure(buffer_span_duration);
+		buffer.add_failure(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 1);
 
@@ -379,7 +484,7 @@ mod test {
 		assert_eq!(buffer.cursor, 4);
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 0);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
-		buffer.add_failure(buffer_span_duration);
+		buffer.add_failure(buffer_span_duration, Instant::now());
 		assert_eq!(buffer.get_node_info(buffer.cursor).failure_count, 1);
 		assert_eq!(buffer.get_node_info(buffer.cursor).success_count, 0);
 	}
