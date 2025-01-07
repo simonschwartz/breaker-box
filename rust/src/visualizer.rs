@@ -382,7 +382,12 @@ impl<'a> Visualizer<'a> {
 						last_tick = Instant::now();
 					},
 					'x' => {
-						print!("{reset_pos}{}", self.render::<(), &str>(None));
+						// Debug output and quit
+						println!(
+							"\n ╔╦╗ ╔═╗ ╔╗  ╦ ╦ ╔═╗\n  ║║ ║╣  ╠╩╗ ║ ║ ║ ╦\n ═╩╝ ╚═╝ ╚═╝ ╚═╝ ╚═╝\n\n{:#?}",
+							self.cb.get_buffer()
+						);
+						break;
 					},
 					_ => {},
 				}
