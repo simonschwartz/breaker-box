@@ -570,4 +570,78 @@ mod test {
 		);
 		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![9, 8, 7]));
 	}
+
+	#[test]
+	fn end_2_end_test() {
+		let buffer_span_duration = Duration::from_secs(1);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_span_duration,
+			..Settings::default()
+		});
+		let vis = Visualizer::new(&mut cb);
+
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 1);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 2);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 4);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 3);
+		vis.cb.record::<(), &str>(Ok(()));
+
+		// We skip 3 nodes ahead
+		std::thread::sleep(buffer_span_duration + buffer_span_duration + buffer_span_duration);
+		vis.cb.evaluate_state();
+
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 1);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 0); // skipped
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0); // skipped
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0); // current
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 3);
+	}
 }
