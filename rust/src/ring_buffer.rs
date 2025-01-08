@@ -78,14 +78,21 @@ impl RingBuffer {
 			end = self.get_buffer_size();
 		}
 
-		// leaving here for debugging
-		// dbg!(self.cursor, new_cursor, start, end, spans_elapsed);
+		// leaving debug calls here for later debugging
+		// dbg!("----", self.cursor, new_cursor, start, end, spans_elapsed);
 		for idx in start..end {
 			let skip_idx = idx % self.get_buffer_size();
 			// dbg!(skip_idx);
 			self.nodes[skip_idx].reset();
 		}
-		self.cursor = new_cursor;
+
+		if new_cursor != self.cursor {
+			self.cursor = new_cursor;
+			// dbg!(new_cursor);
+			self.nodes[new_cursor].reset();
+			self.last_record = now;
+		}
+
 		self.cursor
 	}
 
@@ -271,9 +278,15 @@ mod test {
 		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1001)), 1);
 		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1002)), 1);
 		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_millis(1003)), 1);
+		assert_eq!(rb.nodes[0].failure_count, 5);
+		assert_eq!(rb.nodes[0].success_count, 7);
+		assert_eq!(rb.nodes[1].failure_count, 0); // node 1 was reset as we just moved here
+		assert_eq!(rb.nodes[1].success_count, 0);
 
 		// now we skip to node 6 and see if only the skipped nodes were reset
 		// Node 1 => Node 6
+		rb.nodes[1].failure_count = 666;
+		rb.nodes[1].success_count = 667;
 		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(6)), 6);
 		assert_eq!(rb.nodes[0].failure_count, 5);
 		assert_eq!(rb.nodes[0].success_count, 7);
@@ -306,6 +319,20 @@ mod test {
 		// now we skip to node 8 and check the skipped nodes that needed to be reset
 		// Node 6 => Node 8
 		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(8)), 8);
+		assert_eq!(rb.nodes[0].failure_count, 5);
+		assert_eq!(rb.nodes[0].success_count, 7);
+		assert_eq!(rb.nodes[6].failure_count, 5);
+		assert_eq!(rb.nodes[6].success_count, 5);
+		assert_eq!(rb.nodes[7].failure_count, 0);
+		assert_eq!(rb.nodes[7].success_count, 0);
+		assert_eq!(rb.nodes[8].failure_count, 0);
+		assert_eq!(rb.nodes[8].success_count, 0);
+		assert_eq!(rb.nodes[9].failure_count, 5);
+		assert_eq!(rb.nodes[9].success_count, 5);
+		// Now we do the very same thing again to make sure get_cursor always returns the same thing even when called multiple times
+		assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(8)), 8);
+		assert_eq!(rb.nodes[0].failure_count, 5);
+		assert_eq!(rb.nodes[0].success_count, 7);
 		assert_eq!(rb.nodes[6].failure_count, 5);
 		assert_eq!(rb.nodes[6].success_count, 5);
 		assert_eq!(rb.nodes[7].failure_count, 0);

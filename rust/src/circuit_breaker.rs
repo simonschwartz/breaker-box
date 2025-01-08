@@ -91,27 +91,28 @@ impl CircuitBreaker {
 	}
 
 	pub fn record<T, E>(&mut self, input: Result<T, E>) {
-		self.evaluate_state();
 		if let State::Open(_) = self.state {
-			return;
+			self.evaluate_state();
 		}
 
-		if let State::HalfOpen = self.state {
-			if input.is_ok() {
-				self.trial_success += 1;
-				self.evaluate_state();
-				return;
-			} else {
-				self.state = State::Open(Instant::now());
-				self.trial_success = 0;
-				return;
-			}
-		}
-
-		if input.is_ok() {
-			self.buffer.add_success(self.settings.buffer_span_duration, Instant::now());
-		} else {
-			self.buffer.add_failure(self.settings.buffer_span_duration, Instant::now());
+		match self.state {
+			State::Open(_) => {},
+			State::HalfOpen => {
+				if input.is_ok() {
+					self.trial_success += 1;
+					self.evaluate_state();
+				} else {
+					self.state = State::Open(Instant::now());
+					self.trial_success = 0;
+				}
+			},
+			State::Closed => {
+				if input.is_ok() {
+					self.buffer.add_success(self.settings.buffer_span_duration, Instant::now());
+				} else {
+					self.buffer.add_failure(self.settings.buffer_span_duration, Instant::now());
+				}
+			},
 		}
 	}
 
