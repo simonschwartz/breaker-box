@@ -42,14 +42,14 @@ impl std::fmt::Display for State {
 pub struct Settings {
 	/// Specify the capacity of the ring buffer.
 	pub buffer_size: usize,
+	/// Determine the duration (in seconds) each node/span in the buffer stores data.
+	pub buffer_span_duration: Duration,
 	/// Define the minimum number of events required in the buffer to evaluate the error rate.
 	pub min_eval_size: usize,
 	/// Set the error rate percentage that will trigger the circuit to open.
 	pub error_threshold: f32,
 	/// Specify the duration (in seconds) the circuit breaker remains open before transitioning to half-open.
 	pub retry_timeout: Duration,
-	/// Determine the duration (in seconds) each node/span in the buffer stores data.
-	pub buffer_span_duration: Duration,
 	/// Set the number of consecutive successes required to close a half-open circuit.
 	pub trial_success_required: usize,
 }
@@ -58,10 +58,10 @@ impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			buffer_size: 5,
+			buffer_span_duration: Duration::from_secs(200),
 			min_eval_size: 100,
 			error_threshold: 10.0,
 			retry_timeout: Duration::from_millis(60000),
-			buffer_span_duration: Duration::from_secs(200),
 			trial_success_required: 20,
 		}
 	}
@@ -86,12 +86,15 @@ impl CircuitBreaker {
 	}
 
 	pub fn get_state(&mut self) -> State {
-		self.evaluate_state();
+		if let State::Open(_) | State::Closed = self.state {
+			self.evaluate_state();
+		}
+
 		self.state
 	}
 
 	pub fn record<T, E>(&mut self, input: Result<T, E>) {
-		if let State::Open(_) = self.state {
+		if let State::Open(_) | State::Closed = self.state {
 			self.evaluate_state();
 		}
 
@@ -125,11 +128,15 @@ impl CircuitBreaker {
 			},
 			State::Closed => {
 				let _ = self.buffer.get_cursor(self.settings.buffer_span_duration, Instant::now());
+				if self.buffer.get_error_rate(self.settings.min_eval_size) > self.settings.error_threshold {
+					self.state = State::Open(Instant::now());
+				}
 			},
 			State::HalfOpen => {
 				if self.trial_success >= self.settings.trial_success_required {
 					self.trial_success = 0;
 					self.state = State::Closed;
+					self.buffer = RingBuffer::new(self.settings.buffer_size); // TODO: remove this for more granular error detection
 					self.buffer.reset_start_time();
 				}
 			},
