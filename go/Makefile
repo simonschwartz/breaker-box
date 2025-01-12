@@ -1,3 +1,6 @@
+test:
+	go test
+
 bench:
 	go test -bench="BenchmarkCircuit(GetState|BreakerRecord)" -benchmem -v ./...
 

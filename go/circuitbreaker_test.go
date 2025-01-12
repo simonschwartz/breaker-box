@@ -2,11 +2,98 @@ package circuitbreaker_test
 
 import (
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"circuitbreaker"
 )
+
+type MockTicker struct {
+	C        chan time.Time
+	duration time.Duration
+	lastTick time.Time
+	mockTime *MockTime
+}
+
+type MockTime struct {
+	MockCurrentTime time.Time
+	tickers         []*MockTicker
+	mu              sync.Mutex
+}
+
+func NewMockTime(initialTime time.Time) *MockTime {
+	return &MockTime{
+		MockCurrentTime: initialTime,
+		tickers:         make([]*MockTicker, 0),
+	}
+}
+
+func (m *MockTime) Now() time.Time {
+	return m.MockCurrentTime
+}
+
+func (m *MockTime) NewTicker(d time.Duration) *time.Ticker {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	mockTicker := &MockTicker{
+		C:        make(chan time.Time, 10),
+		duration: d,
+		lastTick: m.MockCurrentTime,
+		mockTime: m,
+	}
+
+	m.tickers = append(m.tickers, mockTicker)
+
+	return &time.Ticker{
+		C: mockTicker.C,
+	}
+}
+
+func (m *MockTime) removeTicker(ticker *MockTicker) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for i, t := range m.tickers {
+		if t == ticker {
+			m.tickers = append(m.tickers[:i], m.tickers[i+1:]...)
+			return
+		}
+	}
+}
+
+func (m *MockTime) FastForward(duration time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.MockCurrentTime = m.MockCurrentTime.Add(duration)
+
+	for _, ticker := range m.tickers {
+		// Check if, given the duration, the ticker should be fired
+		next := ticker.lastTick.Add(ticker.duration)
+		if next.Before(m.MockCurrentTime) || next.Equal(m.MockCurrentTime) {
+			ticker.C <- ticker.lastTick.Add(ticker.duration)
+			ticker.lastTick = ticker.lastTick.Add(ticker.duration)
+		}
+	}
+
+	// Internally the circuit breaker sets up functions in goroutines that are triggered by ticks.
+	// There is a very small delay between a tick occurs and the callback function runs because we need to wait for Go to schedule the goroutine
+	// To get around this we add a small delay(not ideal) to give the Go runtime a chance to run the goroutine
+	time.Sleep(1 * time.Millisecond)
+}
+
+func (t *MockTicker) Stop() {
+	t.mockTime.removeTicker(t)
+	close(t.C)
+}
+
+func assert[T comparable](t *testing.T, actual T, expected T) {
+	t.Helper()
+	if actual != expected {
+		t.Errorf("got %v, want %v", actual, expected)
+	}
+}
 
 func RecordErrors(num int, cb *circuitbreaker.CircuitBreaker) {
 	for i := 0; i < num; i++ {
@@ -20,29 +107,8 @@ func RecordSuccesses(num int, cb *circuitbreaker.CircuitBreaker) {
 	}
 }
 
-func FastForward(duration time.Duration, mockTime *MockTime) {
-	mockTime.MockCurrentTime = mockTime.MockCurrentTime.Add(duration)
-}
-
-type MockTime struct {
-	MockCurrentTime time.Time
-}
-
-func (m *MockTime) Now() time.Time {
-	return m.MockCurrentTime
-}
-
-func assert[T comparable](t *testing.T, actual T, expected T) {
-	t.Helper()
-	if actual != expected {
-		t.Errorf("got %v, want %v", actual, expected)
-	}
-}
-
 func TestCircuitBreaker(t *testing.T) {
-	mockTime := &MockTime{
-		MockCurrentTime: time.Now(),
-	}
+	mockTime := NewMockTime(time.Now())
 
 	cb := circuitbreaker.
 		New().
@@ -82,9 +148,9 @@ func TestCircuitBreaker(t *testing.T) {
 	}
 
 	for _, s := range fillBuffer {
+		mockTime.FastForward(61 * time.Second)
 		RecordErrors(s.errors, cb)
 		RecordSuccesses(s.successes, cb)
-		FastForward(61*time.Second, mockTime)
 	}
 
 	rate = cb.GetErrorRate()
@@ -96,7 +162,7 @@ func TestCircuitBreaker(t *testing.T) {
 	// Second - simulate a spike in errors to Open the circuit
 	RecordErrors(250, cb)
 	RecordSuccesses(1, cb)
-	FastForward(61*time.Second, mockTime)
+	mockTime.FastForward(61 * time.Second)
 	RecordErrors(1, cb)
 
 	rate = cb.GetErrorRate()
@@ -106,7 +172,7 @@ func TestCircuitBreaker(t *testing.T) {
 	assert(t, rate, 0.0)
 
 	// Third - wait 1 minute for the circuit to move to HalfOpen
-	FastForward(61*time.Second, mockTime)
+	mockTime.FastForward(61 * time.Second)
 	RecordSuccesses(1, cb)
 
 	state = cb.GetState()
@@ -119,10 +185,10 @@ func TestCircuitBreaker(t *testing.T) {
 	assert(t, circuitbreaker.Open, state)
 
 	// Fifth - wait 1 minute for the circuit to move to HalfOpen
-	// Add 1- consecutive values so the circuit closes
-	FastForward(61*time.Second, mockTime)
-	// need to do this to get the state to update
+	mockTime.FastForward(61 * time.Second)
+
 	state = cb.GetState()
+
 	assert(t, circuitbreaker.HalfOpen, state)
 
 	RecordSuccesses(20, cb)
