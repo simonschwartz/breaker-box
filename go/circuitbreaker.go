@@ -277,3 +277,32 @@ func (cb *CircuitBreaker) GetErrorRate() float64 {
 
 	return cb.errorRate
 }
+
+// UNSAFE - only intended for use by internal testing tools
+func (cb *CircuitBreaker) UNSAFEGetActiveCursor() *Node {
+	return cb.buffer.Cursor()
+}
+
+// UNSAFE - only intended for use by internal testing tools
+func (cb *CircuitBreaker) UNSAFEGetBufferLength() int {
+	return cb.buffer.Len()
+}
+
+// UNSAFE - only intended for use by internal testing tools
+func (cb *CircuitBreaker) UNSAFEGetCursorIndex() int {
+	return cb.buffer.GetCursorIndex()
+}
+
+// UNSAFE - only intended for use by internal testing tools
+func (cb *CircuitBreaker) UNSAFEGetCursorByIndex(index int) *Node {
+	return cb.buffer.GetCursorByIndex(index)
+}
+
+// UNSAFE - only intended for use by internal testing tools
+func (cb *CircuitBreaker) UNSAFEGetTrialState() (int, int) {
+	return cb.trialSuccesses, cb.trialSuccessesRequired
+}
+
+func (cb *CircuitBreaker) UNSAFEGetRetryTimeout() time.Duration {
+	return cb.retryTimeout
+}
