@@ -103,7 +103,11 @@ impl<'a> Visualizer<'a> {
 
 	fn render_buffer_box_top(&mut self, index: usize) -> String {
 		let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
-		let is_active = self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index;
+		let is_active = if self.cb.get_state() == State::Closed {
+			self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index
+		} else {
+			false
+		};
 		match is_active {
 			true => String::from("┏━━━━━━━━━━━━━━━━━┓"),
 			false => String::from("┌─────────────────┐"),
@@ -112,7 +116,11 @@ impl<'a> Visualizer<'a> {
 
 	fn render_buffer_box_middle(&mut self, index: usize) -> String {
 		let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
-		let is_active = self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index;
+		let is_active = if self.cb.get_state() == State::Closed {
+			self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index
+		} else {
+			false
+		};
 		let infos = self.cb.get_buffer().get_node_info(index);
 		match is_active {
 			true => format!(
@@ -128,7 +136,11 @@ impl<'a> Visualizer<'a> {
 
 	fn render_buffer_box_bottom(&mut self, index: usize) -> String {
 		let buffer_span_duration = self.cb.get_settings().buffer_span_duration;
-		let is_active = self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index;
+		let is_active = if self.cb.get_state() == State::Closed {
+			self.cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()) == index
+		} else {
+			false
+		};
 		match is_active {
 			true => String::from("┗━━━━━━━━━━━━━━━━━┛"),
 			false => String::from("└─────────────────┘"),
