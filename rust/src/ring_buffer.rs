@@ -50,6 +50,52 @@ impl RingBuffer {
 		}
 	}
 
+	pub fn add_failure(&mut self, buffer_span_duration: Duration, now: Instant) {
+		let index = self.get_cursor(buffer_span_duration, now);
+		self.nodes[index].failure_count += 1;
+		self.last_record = now;
+	}
+
+	pub fn add_success(&mut self, buffer_span_duration: Duration, now: Instant) {
+		let index = self.get_cursor(buffer_span_duration, now);
+		self.nodes[index].success_count += 1;
+		self.last_record = now;
+	}
+
+	pub fn get_node_info(&self, index: usize) -> NodeInfo {
+		NodeInfo {
+			failure_count: self.nodes[index].failure_count,
+			success_count: self.nodes[index].success_count,
+		}
+	}
+
+	pub fn get_error_rate(&self, min_eval_size: usize) -> f32 {
+		let mut failures = 0;
+		let mut successes = 0;
+
+		for (i, node) in self.nodes.iter().enumerate() {
+			if i == self.cursor {
+				continue;
+			}
+
+			if node.failure_count + node.success_count != 0 {
+				failures += node.failure_count;
+				successes += node.success_count;
+			}
+		}
+
+		if failures + successes < min_eval_size || failures + successes == 0 {
+			0.0
+		} else {
+			((failures as f32 / (failures + successes) as f32) * 10_000.0).round() / 100.0
+		}
+	}
+
+	// TODO:
+	// fn get_size
+	// fn get_cursor
+	// fn advance
+
 	pub fn reset_start_time(&mut self) {
 		self.start_time = Instant::now();
 		self.last_record = Instant::now();
@@ -96,51 +142,10 @@ impl RingBuffer {
 		self.cursor
 	}
 
-	pub fn add_failure(&mut self, buffer_span_duration: Duration, now: Instant) {
-		let index = self.get_cursor(buffer_span_duration, now);
-		self.nodes[index].failure_count += 1;
-		self.last_record = now;
-	}
-
-	pub fn add_success(&mut self, buffer_span_duration: Duration, now: Instant) {
-		let index = self.get_cursor(buffer_span_duration, now);
-		self.nodes[index].success_count += 1;
-		self.last_record = now;
-	}
-
 	pub fn get_elapsed_time(&self, buffer_span_duration: Duration, now: Instant) -> Duration {
 		let elapsed = now.duration_since(self.start_time);
 		let remainder_ns = elapsed.as_nanos() % buffer_span_duration.as_nanos();
 		Duration::from_nanos(remainder_ns as u64)
-	}
-
-	pub fn get_error_rate(&self, min_eval_size: usize) -> f32 {
-		let mut failures = 0;
-		let mut successes = 0;
-
-		for (i, node) in self.nodes.iter().enumerate() {
-			if i == self.cursor {
-				continue;
-			}
-
-			if node.failure_count + node.success_count != 0 {
-				failures += node.failure_count;
-				successes += node.success_count;
-			}
-		}
-
-		if failures + successes < min_eval_size || failures + successes == 0 {
-			0.0
-		} else {
-			((failures as f32 / (failures + successes) as f32) * 10_000.0).round() / 100.0
-		}
-	}
-
-	pub fn get_node_info(&self, index: usize) -> NodeInfo {
-		NodeInfo {
-			failure_count: self.nodes[index].failure_count,
-			success_count: self.nodes[index].success_count,
-		}
 	}
 }
 

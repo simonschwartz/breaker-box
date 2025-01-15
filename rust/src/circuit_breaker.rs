@@ -143,6 +143,10 @@ impl CircuitBreaker {
 		}
 	}
 
+	// TODO:
+	// fn advance_buffer_for_time
+
+	// -- Additional getters/setters for introspection --
 	pub fn get_buffer(&mut self) -> &mut RingBuffer {
 		&mut self.buffer
 	}
