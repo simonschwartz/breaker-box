@@ -222,236 +222,243 @@ mod test {
 	use super::*;
 	use crate::ring_buffer::NodeInfo;
 
-	// #[test]
-	// fn new_test() {
-	// 	assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_buffer_size(), 5);
-	// 	assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
-	// 	assert_eq!(
-	// 		CircuitBreaker::new(Settings {
-	// 			buffer_size: 10,
-	// 			..Settings::default()
-	// 		})
-	// 		.buffer
-	// 		.get_buffer_size(),
-	// 		10
-	// 	);
-	// 	assert_eq!(
-	// 		CircuitBreaker::new(Settings {
-	// 			buffer_size: 666,
-	// 			min_eval_size: 5,
-	// 			error_threshold: 99.99,
-	// 			retry_timeout: Duration::from_millis(20),
-	// 			buffer_span_duration: Duration::from_millis(999),
-	// 			trial_success_required: 42,
-	// 			..Settings::default()
-	// 		})
-	// 		.settings,
-	// 		Settings {
-	// 			buffer_size: 666,
-	// 			min_eval_size: 5,
-	// 			error_threshold: 99.99,
-	// 			retry_timeout: Duration::from_millis(20),
-	// 			buffer_span_duration: Duration::from_millis(999),
-	// 			trial_success_required: 42,
-	// 		}
-	// 	);
-	// }
+	#[test]
+	fn new_test() {
+		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_size(), 5);
+		assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
+		assert_eq!(
+			CircuitBreaker::new(Settings {
+				buffer_size: 10,
+				..Settings::default()
+			})
+			.buffer
+			.get_size(),
+			10
+		);
+		assert_eq!(
+			CircuitBreaker::new(Settings {
+				buffer_size: 666,
+				min_eval_size: 5,
+				error_threshold: 99.99,
+				retry_timeout: Duration::from_millis(20),
+				buffer_span_duration: Duration::from_millis(999),
+				trial_success_required: 42,
+				..Settings::default()
+			})
+			.settings,
+			Settings {
+				buffer_size: 666,
+				min_eval_size: 5,
+				error_threshold: 99.99,
+				retry_timeout: Duration::from_millis(20),
+				buffer_span_duration: Duration::from_millis(999),
+				trial_success_required: 42,
+			}
+		);
+	}
 
-	// #[test]
-	// fn get_state_test() {
-	// 	assert_eq!(CircuitBreaker::new(Settings::default()).get_state(), State::Closed);
-	// }
+	#[test]
+	fn get_state_test() {
+		assert_eq!(CircuitBreaker::new(Settings::default()).get_state(), State::Closed);
+	}
 
-	// #[test]
-	// fn record_test() {
-	// 	let mut cb = CircuitBreaker::new(Settings::default());
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 0,
-	// 			failure_count: 0,
-	// 		}
-	// 	);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 0,
-	// 		}
-	// 	);
-	// 	cb.record::<(), &str>(Err(""));
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 1,
-	// 		}
-	// 	);
+	#[test]
+	fn record_test() {
+		let mut cb = CircuitBreaker::new(Settings::default());
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 0,
+			}
+		);
+		cb.record::<(), &str>(Err(""));
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 1,
+			}
+		);
 
-	// 	cb.state = State::Open(Instant::now());
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 1,
-	// 		}
-	// 	);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Err(""));
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 1,
-	// 		}
-	// 	);
+		cb.state = State::Open(Instant::now());
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 1,
+			}
+		);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Err(""));
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 1,
+			}
+		);
 
-	// 	cb.state = State::HalfOpen;
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 1,
-	// 		}
-	// 	);
-	// 	assert_eq!(cb.trial_success, 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 1,
-	// 		}
-	// 	);
-	// 	assert_eq!(cb.trial_success, 1);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	assert_eq!(
-	// 		cb.buffer.get_node_info(0),
-	// 		NodeInfo {
-	// 			success_count: 1,
-	// 			failure_count: 1,
-	// 		}
-	// 	);
-	// 	assert_eq!(cb.trial_success, 2);
-	// 	cb.record::<(), &str>(Err(""));
-	// 	assert!(matches!(cb.state, State::Open(_)));
-	// }
+		cb.state = State::HalfOpen;
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 1,
+			}
+		);
+		assert_eq!(cb.trial_success, 0);
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 1,
+			}
+		);
+		assert_eq!(cb.trial_success, 1);
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(
+			cb.buffer.get_node_info(0),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 1,
+			}
+		);
+		assert_eq!(cb.trial_success, 2);
+		cb.record::<(), &str>(Err(""));
+		assert!(matches!(cb.state, State::Open(_)));
+	}
 
-	// #[test]
-	// fn record_timed_test() {
-	// 	let buffer_span_duration = Duration::from_secs(1);
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_span_duration,
-	// 		..Settings::default()
-	// 	});
+	#[test]
+	fn record_timed_test() {
+		let buffer_span_duration = Duration::from_secs(1);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_span_duration,
+			..Settings::default()
+		});
 
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 1);
-	// 	assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(1).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(2).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(3).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 2);
-	// 	assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(2).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(3).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 3);
-	// 	assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(2).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(3).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 4);
-	// 	assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(2).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(3).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 0);
-	// 	assert_eq!(cb.buffer.get_node_info(0).success_count, 0);
-	// 	assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(2).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(3).success_count, 3);
-	// 	assert_eq!(cb.buffer.get_node_info(4).success_count, 3);
-	// 	cb.record::<(), &str>(Ok(()));
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 1);
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 2);
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 3);
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 4);
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 0);
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 0);
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 3);
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 3);
+		cb.record::<(), &str>(Ok(()));
 
-	// 	// We skip 3 nodes ahead
-	// 	std::thread::sleep(buffer_span_duration + buffer_span_duration + buffer_span_duration);
-	// 	cb.evaluate_state();
+		// We skip 3 nodes ahead
+		std::thread::sleep(buffer_span_duration + buffer_span_duration + buffer_span_duration);
+		cb.evaluate_state();
 
-	// 	assert_eq!(cb.buffer.get_node_info(0).success_count, 1);
-	// 	assert_eq!(cb.buffer.get_node_info(1).success_count, 0); // skipped
-	// 	assert_eq!(cb.buffer.get_node_info(2).success_count, 0); // skipped
-	// 	assert_eq!(cb.buffer.get_node_info(3).success_count, 0); // current
-	// 	assert_eq!(cb.buffer.get_node_info(4).success_count, 3);
-	// 	assert_eq!(cb.get_buffer().get_cursor(buffer_span_duration, Instant::now()), 3);
-	// }
+		assert_eq!(cb.buffer.get_node_info(0).success_count, 1);
+		assert_eq!(cb.buffer.get_node_info(1).success_count, 0); // skipped
+		assert_eq!(cb.buffer.get_node_info(2).success_count, 0); // skipped
+		assert_eq!(cb.buffer.get_node_info(3).success_count, 0); // current
+		assert_eq!(cb.buffer.get_node_info(4).success_count, 3);
+		cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(cb.get_buffer().get_cursor(), 3);
+	}
 
-	// #[test]
-	// fn evaluate_state_test() {
-	// 	// TODO
-	// }
+	#[test]
+	fn evaluate_state_test() {
+		// TODO
+	}
 
-	// #[test]
-	// fn get_buffer_test() {
-	// 	let mut cb = CircuitBreaker::new(Settings::default());
-	// 	assert!(std::ptr::eq(cb.get_buffer(), &mut cb.buffer));
-	// }
+	#[test]
+	fn get_buffer_test() {
+		let mut cb = CircuitBreaker::new(Settings::default());
+		assert!(std::ptr::eq(cb.get_buffer(), &mut cb.buffer));
+	}
 
-	// #[test]
-	// fn get_trial_success_test() {
-	// 	let mut cb = CircuitBreaker::new(Settings::default());
-	// 	cb.state = State::HalfOpen;
-	// 	assert_eq!(cb.get_trial_success(), 0);
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	cb.record::<(), &str>(Ok(()));
-	// 	assert_eq!(cb.get_trial_success(), 3);
-	// }
+	#[test]
+	fn get_trial_success_test() {
+		let mut cb = CircuitBreaker::new(Settings::default());
+		cb.state = State::HalfOpen;
+		assert_eq!(cb.get_trial_success(), 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(cb.get_trial_success(), 3);
+	}
 
-	// #[test]
-	// fn get_settings_test() {
-	// 	let cb = CircuitBreaker::new(Settings::default());
-	// 	assert_eq!(*cb.get_settings(), Settings::default());
+	#[test]
+	fn get_settings_test() {
+		let cb = CircuitBreaker::new(Settings::default());
+		assert_eq!(*cb.get_settings(), Settings::default());
 
-	// 	let settings = Settings {
-	// 		buffer_size: 666,
-	// 		min_eval_size: 42,
-	// 		error_threshold: 5.5,
-	// 		retry_timeout: Duration::from_millis(55),
-	// 		buffer_span_duration: Duration::from_secs(80),
-	// 		trial_success_required: 100,
-	// 	};
-	// 	let cb = CircuitBreaker::new(settings);
-	// 	assert_eq!(*cb.get_settings(), settings);
-	// }
+		let settings = Settings {
+			buffer_size: 666,
+			min_eval_size: 42,
+			error_threshold: 5.5,
+			retry_timeout: Duration::from_millis(55),
+			buffer_span_duration: Duration::from_secs(80),
+			trial_success_required: 100,
+		};
+		let cb = CircuitBreaker::new(settings);
+		assert_eq!(*cb.get_settings(), settings);
+	}
 
-	// #[test]
-	// fn get_error_rate_test() {
-	// 	// TODO
-	// }
+	#[test]
+	fn get_error_rate_test() {
+		// TODO
+	}
 }

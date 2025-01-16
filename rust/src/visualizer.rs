@@ -432,28 +432,28 @@ mod test {
 	use super::*;
 	use crate::circuit_breaker::{CircuitBreaker, Settings};
 
-	// #[test]
-	// fn render_buffer_box_test() {
-	// 	let mut cb = CircuitBreaker::new(Settings { ..Settings::default() });
-	// 	let mut vis = Visualizer::new(&mut cb);
-	// 	assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
-	// 	assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 000 \x1b[0m \x1b[41m 000 \x1b[0m ┃"));
-	// 	assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
+	#[test]
+	fn render_buffer_box_test() {
+		let mut cb = CircuitBreaker::new(Settings { ..Settings::default() });
+		let mut vis = Visualizer::new(&mut cb);
+		assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
+		assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 000 \x1b[0m \x1b[41m 000 \x1b[0m ┃"));
+		assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
 
-	// 	assert_eq!(vis.render_buffer_box_top(1), String::from("┌─────────────────┐"));
-	// 	assert_eq!(vis.render_buffer_box_middle(1), String::from("│ B1  \x1b[42m 000 \x1b[0m \x1b[41m 000 \x1b[0m │"));
-	// 	assert_eq!(vis.render_buffer_box_bottom(1), String::from("└─────────────────┘"));
+		assert_eq!(vis.render_buffer_box_top(1), String::from("┌─────────────────┐"));
+		assert_eq!(vis.render_buffer_box_middle(1), String::from("│ B1  \x1b[42m 000 \x1b[0m \x1b[41m 000 \x1b[0m │"));
+		assert_eq!(vis.render_buffer_box_bottom(1), String::from("└─────────────────┘"));
 
-	// 	vis.record::<(), &str>(Err(""));
-	// 	vis.record::<(), ()>(Ok(()));
-	// 	vis.record::<(), ()>(Ok(()));
-	// 	vis.record::<(), &str>(Err(""));
-	// 	vis.record::<(), ()>(Ok(()));
+		vis.record::<(), &str>(Err(""));
+		vis.record::<(), ()>(Ok(()));
+		vis.record::<(), ()>(Ok(()));
+		vis.record::<(), &str>(Err(""));
+		vis.record::<(), ()>(Ok(()));
 
-	// 	assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
-	// 	assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 003 \x1b[0m \x1b[41m 002 \x1b[0m ┃"));
-	// 	assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
-	// }
+		assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
+		assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 003 \x1b[0m \x1b[41m 002 \x1b[0m ┃"));
+		assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
+	}
 
 	// #[test]
 	// fn new_test() {

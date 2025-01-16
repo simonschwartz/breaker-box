@@ -37,7 +37,7 @@ pub struct RingBuffer {
 }
 
 impl RingBuffer {
-	/// Create a new ring buffer with `elements` nodes
+	/// Create a new ring buffer with `elements` [Node]
 	pub fn new(elements: usize) -> Self {
 		Self {
 			cursor: 0,
@@ -132,56 +132,23 @@ impl RingBuffer {
 mod test {
 	use super::*;
 
-	// #[test]
-	// fn new_test() {
-	// 	assert_eq!(RingBuffer::new(1).nodes.len(), 1);
-	// 	assert_eq!(RingBuffer::new(1).nodes[0].failure_count, 0);
-	// 	assert_eq!(RingBuffer::new(1).nodes[0].success_count, 0);
-	// 	assert_eq!(RingBuffer::new(5).nodes.len(), 5);
-	// 	assert_eq!(RingBuffer::new(5).nodes[4].failure_count, 0);
-	// 	assert_eq!(RingBuffer::new(5).nodes[4].success_count, 0);
-	// 	assert_eq!(RingBuffer::new(100).nodes.len(), 100);
-	// }
+	#[test]
+	fn new_test() {
+		assert_eq!(RingBuffer::new(1).nodes.len(), 1);
+		assert_eq!(RingBuffer::new(1).nodes[0].failure_count, 0);
+		assert_eq!(RingBuffer::new(1).nodes[0].success_count, 0);
+		assert_eq!(RingBuffer::new(5).nodes.len(), 5);
+		assert_eq!(RingBuffer::new(5).nodes[4].failure_count, 0);
+		assert_eq!(RingBuffer::new(5).nodes[4].success_count, 0);
+		assert_eq!(RingBuffer::new(100).nodes.len(), 100);
+	}
 
-	// #[test]
-	// fn get_buffer_size_test() {
-	// 	assert_eq!(RingBuffer::new(1).get_buffer_size(), 1);
-	// 	assert_eq!(RingBuffer::new(5).get_buffer_size(), 5);
-	// 	assert_eq!(RingBuffer::new(100).get_buffer_size(), 100);
-	// }
-
-	// #[test]
-	// fn get_cursor_skip_test() {
-	// 	let start_time = Instant::now();
-	// 	let mut rb = RingBuffer {
-	// 		cursor: 0,
-	// 		nodes: vec![Node::new(); 4],
-	// 		start_time,
-	// 		last_record: start_time,
-	// 	};
-	// 	let buffer_span_duration = Duration::from_secs(1);
-
-	// 	rb.nodes[0].failure_count = 5;
-	// 	rb.nodes[0].success_count = 5;
-	// 	rb.nodes[1].failure_count = 5;
-	// 	rb.nodes[1].success_count = 5;
-	// 	rb.nodes[2].failure_count = 5;
-	// 	rb.nodes[2].success_count = 5;
-	// 	rb.nodes[3].failure_count = 5;
-	// 	rb.nodes[3].success_count = 5;
-
-	// 	// We skip to the 3rd node
-	// 	assert_eq!(rb.get_cursor(buffer_span_duration, start_time + Duration::from_secs(2)), 2);
-
-	// 	assert_eq!(rb.nodes[0].failure_count, 5);
-	// 	assert_eq!(rb.nodes[0].success_count, 5);
-	// 	assert_eq!(rb.nodes[1].failure_count, 0); // skipped
-	// 	assert_eq!(rb.nodes[1].success_count, 0); // skipped
-	// 	assert_eq!(rb.nodes[2].failure_count, 0); // current
-	// 	assert_eq!(rb.nodes[2].success_count, 0); // current
-	// 	assert_eq!(rb.nodes[3].failure_count, 5);
-	// 	assert_eq!(rb.nodes[3].success_count, 5);
-	// }
+	#[test]
+	fn get_size_test() {
+		assert_eq!(RingBuffer::new(1).get_size(), 1);
+		assert_eq!(RingBuffer::new(5).get_size(), 5);
+		assert_eq!(RingBuffer::new(100).get_size(), 100);
+	}
 
 	// #[test]
 	// fn get_cursor_timed_test() {
