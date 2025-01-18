@@ -455,202 +455,207 @@ mod test {
 		assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
 	}
 
-	// #[test]
-	// fn new_test() {
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 1,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, None);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, None);
+	#[test]
+	fn new_test() {
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 1,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, None);
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 2,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, None);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, None);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 2,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, None);
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 3,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, None);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, None);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 3,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, None);
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 4,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, None);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![3]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 4,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![3]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 5,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, None);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![4, 3]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 5,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![4, 3]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 6,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, None);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![5, 4, 3]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 6,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, None);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![5, 4, 3]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 7,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::One(3)]));
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![6, 5, 4]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 7,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::One(3)]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![6, 5, 4]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 8,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(7, 3)]));
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![6, 5, 4]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 8,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(7, 3)]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![6, 5, 4]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 9,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(8, 3), MiddleBuffer::One(4),]));
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![7, 6, 5]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 9,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(8, 3), MiddleBuffer::One(4),]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![7, 6, 5]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 10,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(9, 3), MiddleBuffer::Two(8, 4),]));
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![7, 6, 5]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 10,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle, Some(vec![MiddleBuffer::Two(9, 3), MiddleBuffer::Two(8, 4),]));
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![7, 6, 5]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 11,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(
-	// 		Visualizer::new(&mut cb).middle,
-	// 		Some(vec![MiddleBuffer::Two(10, 3), MiddleBuffer::Two(9, 4), MiddleBuffer::One(5),])
-	// 	);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![8, 7, 6]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 11,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(
+			Visualizer::new(&mut cb).middle,
+			Some(vec![MiddleBuffer::Two(10, 3), MiddleBuffer::Two(9, 4), MiddleBuffer::One(5),])
+		);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![8, 7, 6]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 12,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(
-	// 		Visualizer::new(&mut cb).middle,
-	// 		Some(vec![
-	// 			MiddleBuffer::Two(11, 3),
-	// 			MiddleBuffer::Two(10, 4),
-	// 			MiddleBuffer::Two(9, 5),
-	// 		])
-	// 	);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![8, 7, 6]));
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 12,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(
+			Visualizer::new(&mut cb).middle,
+			Some(vec![
+				MiddleBuffer::Two(11, 3),
+				MiddleBuffer::Two(10, 4),
+				MiddleBuffer::Two(9, 5),
+			])
+		);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![8, 7, 6]));
 
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_size: 13,
-	// 		..Settings::default()
-	// 	});
-	// 	assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
-	// 	assert_eq!(
-	// 		Visualizer::new(&mut cb).middle,
-	// 		Some(vec![
-	// 			MiddleBuffer::Two(12, 3),
-	// 			MiddleBuffer::Two(11, 4),
-	// 			MiddleBuffer::Two(10, 5),
-	// 			MiddleBuffer::One(6),
-	// 		])
-	// 	);
-	// 	assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![9, 8, 7]));
-	// }
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 13,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(
+			Visualizer::new(&mut cb).middle,
+			Some(vec![
+				MiddleBuffer::Two(12, 3),
+				MiddleBuffer::Two(11, 4),
+				MiddleBuffer::Two(10, 5),
+				MiddleBuffer::One(6),
+			])
+		);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![9, 8, 7]));
+	}
 
-	// #[test]
-	// fn end_2_end_test() {
-	// 	let buffer_span_duration = Duration::from_secs(1);
-	// 	let mut cb = CircuitBreaker::new(Settings {
-	// 		buffer_span_duration,
-	// 		..Settings::default()
-	// 	});
-	// 	let vis = Visualizer::new(&mut cb);
+	#[test]
+	fn end_2_end_test() {
+		let buffer_span_duration = Duration::from_secs(1);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_span_duration,
+			..Settings::default()
+		});
+		let vis = Visualizer::new(&mut cb);
 
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 0);
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 1);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 2);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 4);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	vis.cb.record::<(), &str>(Ok(()));
-	// 	std::thread::sleep(buffer_span_duration);
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 0);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 3);
-	// 	vis.cb.record::<(), &str>(Ok(()));
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		vis.cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 1);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		vis.cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 2);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		vis.cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		vis.cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 4);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 0);
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		vis.cb.record::<(), &str>(Ok(()));
+		std::thread::sleep(buffer_span_duration);
+		vis.cb.advance_buffer_for_time(Instant::now());
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 0);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 3);
+		vis.cb.record::<(), &str>(Ok(()));
 
-	// 	// We skip 3 nodes ahead
-	// 	std::thread::sleep(buffer_span_duration + buffer_span_duration + buffer_span_duration);
-	// 	vis.cb.evaluate_state();
+		// We skip 3 nodes ahead
+		std::thread::sleep(buffer_span_duration + buffer_span_duration + buffer_span_duration);
+		vis.cb.advance_buffer_for_time(Instant::now());
 
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 1);
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 0); // skipped
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0); // skipped
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0); // current
-	// 	assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 3);
-	// 	assert_eq!(vis.cb.get_buffer().get_cursor(), 3);
-	// }
+		assert_eq!(vis.cb.get_buffer().get_node_info(0).success_count, 1);
+		assert_eq!(vis.cb.get_buffer().get_node_info(1).success_count, 0); // skipped
+		assert_eq!(vis.cb.get_buffer().get_node_info(2).success_count, 0); // skipped
+		assert_eq!(vis.cb.get_buffer().get_node_info(3).success_count, 0); // current
+		assert_eq!(vis.cb.get_buffer().get_node_info(4).success_count, 3);
+		assert_eq!(vis.cb.get_buffer().get_cursor(), 3);
+	}
 }

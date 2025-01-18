@@ -111,7 +111,7 @@ impl CircuitBreaker {
 
 	/// Determine if we need to advance the ring buffer based on how much time has
 	/// passed since `self.last_record`
-	fn advance_buffer_for_time(&mut self, now: Instant) {
+	pub fn advance_buffer_for_time(&mut self, now: Instant) {
 		let elapsed = now.duration_since(self.last_record);
 		if elapsed.is_zero() {
 			return;
@@ -180,8 +180,6 @@ impl CircuitBreaker {
 			},
 		}
 	}
-
-	// -- Additional getters/setters for introspection --
 
 	/// Get the ring buffer instance as mutable reference
 	pub fn get_buffer(&mut self) -> &mut RingBuffer {
@@ -460,5 +458,20 @@ mod test {
 	#[test]
 	fn get_error_rate_test() {
 		// TODO
+	}
+
+	#[test]
+	fn get_elapsed_time_test() {
+		let timeout = Instant::now();
+		let cb = CircuitBreaker {
+			start_time: timeout,
+			last_record: timeout,
+			..CircuitBreaker::default()
+		};
+
+		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(1)), Duration::from_secs(1));
+		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(4)), Duration::from_secs(4));
+		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(5)), Duration::from_secs(0));
+		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(6)), Duration::from_secs(1));
 	}
 }
