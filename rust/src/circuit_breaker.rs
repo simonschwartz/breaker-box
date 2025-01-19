@@ -261,6 +261,11 @@ mod test {
 	}
 
 	#[test]
+	fn advance_buffer_for_time_test() {
+		// TODO
+	}
+
+	#[test]
 	fn record_test() {
 		let mut cb = CircuitBreaker::new(Settings::default());
 		assert_eq!(
@@ -418,7 +423,108 @@ mod test {
 
 	#[test]
 	fn evaluate_state_test() {
-		// TODO
+		// Open state within the retry_timeout time
+		let retry_timeout = Duration::from_secs(1);
+		let mut cb = CircuitBreaker {
+			buffer: RingBuffer::new(5),
+			state: State::Open(Instant::now()),
+			last_record: Instant::now(),
+			start_time: Instant::now(),
+			trial_success: 0,
+			settings: Settings {
+				retry_timeout,
+				..Settings::default()
+			},
+		};
+		cb.evaluate_state();
+		assert!(matches!(cb.get_state(), State::Open(_)));
+
+		// Open state after the retry_timeout time
+		let retry_timeout = Duration::from_secs(1);
+		let mut cb = CircuitBreaker {
+			buffer: RingBuffer::new(5),
+			state: State::Open(Instant::now() - retry_timeout),
+			last_record: Instant::now(),
+			start_time: Instant::now(),
+			trial_success: 0,
+			settings: Settings {
+				retry_timeout,
+				..Settings::default()
+			},
+		};
+		cb.evaluate_state();
+		assert_eq!(cb.get_state(), State::HalfOpen);
+
+		// Closed state within the margin of error
+		let buffer_span_duration = Duration::from_secs(1);
+		let mut cb = CircuitBreaker {
+			buffer: RingBuffer::new(5),
+			state: State::Closed,
+			last_record: Instant::now(),
+			start_time: Instant::now(),
+			trial_success: 0,
+			settings: Settings {
+				min_eval_size: 4,
+				error_threshold: 39.99999,
+				buffer_span_duration,
+				..Settings::default()
+			},
+		};
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.advance_buffer_for_time(Instant::now() + buffer_span_duration);
+		assert_eq!(cb.get_error_rate(), 20.0);
+		cb.evaluate_state();
+		assert_eq!(cb.get_state(), State::Closed);
+
+		// Closed state an error larger than error_threshold
+		let buffer_span_duration = Duration::from_secs(1);
+		let mut cb = CircuitBreaker {
+			buffer: RingBuffer::new(5),
+			state: State::Closed,
+			last_record: Instant::now(),
+			start_time: Instant::now(),
+			trial_success: 0,
+			settings: Settings {
+				min_eval_size: 4,
+				error_threshold: 39.99999,
+				buffer_span_duration,
+				..Settings::default()
+			},
+		};
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.advance_buffer_for_time(Instant::now() + buffer_span_duration);
+		assert_eq!(cb.get_error_rate(), 40.0);
+		cb.evaluate_state();
+		assert!(matches!(cb.get_state(), State::Open(_)));
+
+		// HalfOpen state with slowly increasing trial_success
+		let mut cb = CircuitBreaker {
+			buffer: RingBuffer::new(5),
+			state: State::HalfOpen,
+			last_record: Instant::now(),
+			start_time: Instant::now(),
+			trial_success: 0,
+			settings: Settings {
+				trial_success_required: 5,
+				..Settings::default()
+			},
+		};
+		cb.evaluate_state();
+		assert_eq!(cb.get_state(), State::HalfOpen);
+		cb.trial_success = 4;
+		cb.evaluate_state();
+		assert_eq!(cb.get_state(), State::HalfOpen);
+		cb.trial_success += 1;
+		cb.evaluate_state();
+		assert_eq!(cb.get_state(), State::Closed);
 	}
 
 	#[test]
