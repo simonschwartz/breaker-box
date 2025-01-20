@@ -262,7 +262,198 @@ mod test {
 
 	#[test]
 	fn advance_buffer_for_time_test() {
-		// TODO
+		let buffer_span_duration = Duration::from_secs(1);
+		let last_record = Instant::now();
+		let mut cb = CircuitBreaker {
+			buffer: RingBuffer::new(3),
+			state: State::Closed,
+			last_record,
+			start_time: Instant::now(),
+			trial_success: 0,
+			settings: Settings {
+				buffer_span_duration,
+				..Settings::default()
+			},
+		};
+
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(cb.get_buffer().get_cursor(), 0);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 2,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+
+		cb.advance_buffer_for_time(last_record);
+		assert_eq!(cb.get_buffer().get_cursor(), 0);
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 2,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+
+		cb.advance_buffer_for_time(last_record + buffer_span_duration);
+		assert_eq!(cb.get_buffer().get_cursor(), 1);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 2,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 2,
+				success_count: 2,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+
+		cb.advance_buffer_for_time(last_record + buffer_span_duration + buffer_span_duration);
+		assert_eq!(cb.get_buffer().get_cursor(), 2);
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 2,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 2,
+				success_count: 2,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 1,
+				success_count: 1,
+			}
+		);
+
+		cb.advance_buffer_for_time(
+			last_record
+				+ buffer_span_duration
+				+ buffer_span_duration
+				+ buffer_span_duration
+				+ buffer_span_duration
+				+ buffer_span_duration,
+		);
+		assert_eq!(cb.get_buffer().get_cursor(), 2);
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		assert_eq!(
+			cb.get_buffer().get_node_info(0),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(1),
+			NodeInfo {
+				failure_count: 0,
+				success_count: 0,
+			}
+		);
+		assert_eq!(
+			cb.get_buffer().get_node_info(2),
+			NodeInfo {
+				failure_count: 2,
+				success_count: 1,
+			}
+		);
 	}
 
 	#[test]
@@ -579,5 +770,10 @@ mod test {
 		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(4)), Duration::from_secs(4));
 		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(5)), Duration::from_secs(0));
 		assert_eq!(cb.get_elapsed_time(Duration::from_secs(5), timeout + Duration::from_secs(6)), Duration::from_secs(1));
+	}
+
+	#[test]
+	fn end_2_end_test() {
+		// TODO: cycle through each [State]
 	}
 }
