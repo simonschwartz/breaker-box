@@ -784,9 +784,29 @@ mod test {
 			..Settings::default()
 		});
 
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 0);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert_eq!(cb.get_state(), State::Closed);
-		assert_eq!(cb.get_buffer().get_cursor(), 0);
+		assert_eq!(cb.get_error_rate(), 0.0);
+
 		cb.record::<(), &str>(Ok(()));
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 0);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 1,
+				failure_count: 0,
+			}
+		);
+		assert_eq!(cb.get_state(), State::Closed);
 		assert_eq!(cb.get_error_rate(), 0.0);
 		std::thread::sleep(buffer_span_duration);
 
@@ -798,26 +818,121 @@ mod test {
 		cb.record::<(), &str>(Err(""));
 		cb.record::<(), &str>(Err(""));
 		std::thread::sleep(buffer_span_duration);
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 1);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 5,
+			}
+		);
 		assert!(matches!(cb.get_state(), State::Open(_)));
 		assert_eq!(cb.get_error_rate(), 83.33);
 
 		cb.record::<(), &str>(Err(""));
 		cb.record::<(), &str>(Ok(()));
 		cb.record::<(), &str>(Err(""));
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 2);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert!(matches!(cb.get_state(), State::Open(_)));
+		assert_eq!(cb.get_error_rate(), 83.33);
 
 		std::thread::sleep(retry_timeout);
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 2);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert_eq!(cb.get_state(), State::HalfOpen);
+		assert_eq!(cb.get_error_rate(), 83.33);
+
 		cb.record::<(), &str>(Ok(()));
 		cb.record::<(), &str>(Ok(()));
+
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 2);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert_eq!(cb.get_state(), State::HalfOpen);
+		assert_eq!(cb.get_error_rate(), 83.33);
+
 		cb.record::<(), &str>(Err(""));
+
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 2);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert!(matches!(cb.get_state(), State::Open(_)));
+		assert_eq!(cb.get_error_rate(), 83.33);
+
 		std::thread::sleep(retry_timeout);
+
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 2);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert_eq!(cb.get_state(), State::HalfOpen);
+		assert_eq!(cb.get_error_rate(), 83.33);
+
 		cb.record::<(), &str>(Ok(()));
 		cb.record::<(), &str>(Ok(()));
 		cb.record::<(), &str>(Ok(()));
+
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 0);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 0,
+				failure_count: 0,
+			}
+		);
 		assert_eq!(cb.get_state(), State::Closed);
+		assert_eq!(cb.get_error_rate(), 0.0);
+
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Err(""));
+
+		let cursor = cb.get_buffer().get_cursor();
+		assert_eq!(cursor, 0);
+		assert_eq!(
+			cb.get_buffer().get_node_info(cursor),
+			NodeInfo {
+				success_count: 4,
+				failure_count: 1,
+			}
+		);
+		assert_eq!(cb.get_state(), State::Closed);
+		assert_eq!(cb.get_error_rate(), 0.0);
 	}
 }
