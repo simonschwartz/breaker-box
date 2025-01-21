@@ -774,6 +774,50 @@ mod test {
 
 	#[test]
 	fn end_2_end_test() {
-		// TODO: cycle through each [State]
+		let buffer_span_duration = Duration::from_millis(300);
+		let retry_timeout = Duration::from_millis(200);
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_span_duration,
+			retry_timeout,
+			min_eval_size: 5,
+			trial_success_required: 3,
+			..Settings::default()
+		});
+
+		assert_eq!(cb.get_state(), State::Closed);
+		assert_eq!(cb.get_buffer().get_cursor(), 0);
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(cb.get_error_rate(), 0.0);
+		std::thread::sleep(buffer_span_duration);
+
+		assert_eq!(cb.get_state(), State::Closed);
+		assert_eq!(cb.get_buffer().get_cursor(), 1);
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Err(""));
+		std::thread::sleep(buffer_span_duration);
+		assert!(matches!(cb.get_state(), State::Open(_)));
+		assert_eq!(cb.get_error_rate(), 83.33);
+
+		cb.record::<(), &str>(Err(""));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Err(""));
+		assert!(matches!(cb.get_state(), State::Open(_)));
+
+		std::thread::sleep(retry_timeout);
+		assert_eq!(cb.get_state(), State::HalfOpen);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(cb.get_state(), State::HalfOpen);
+		cb.record::<(), &str>(Err(""));
+		assert!(matches!(cb.get_state(), State::Open(_)));
+		std::thread::sleep(retry_timeout);
+		assert_eq!(cb.get_state(), State::HalfOpen);
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		cb.record::<(), &str>(Ok(()));
+		assert_eq!(cb.get_state(), State::Closed);
 	}
 }
