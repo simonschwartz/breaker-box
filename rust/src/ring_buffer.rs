@@ -1,3 +1,5 @@
+//! A rust implementation of a ring buffer without using a linked list
+/// The node within the [RingBuffer]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Node {
 	failure_count: usize,
@@ -24,12 +26,14 @@ impl Default for Node {
 	}
 }
 
+/// A struct to hold infos about a node of a [RingBuffer]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NodeInfo {
 	pub failure_count: usize,
 	pub success_count: usize,
 }
 
+/// The main ring buffer struct
 #[derive(Debug, PartialEq)]
 pub struct RingBuffer {
 	cursor: usize,

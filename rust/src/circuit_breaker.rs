@@ -1,11 +1,20 @@
+//! This is the main circuit breaker implementation
+//! It allows you to give your system a break when a threshhold of errors has
+//! been reached.
 use std::time::{Duration, Instant};
 
 use crate::ring_buffer::RingBuffer;
 
+/// The state of our [CircuitBreaker]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum State {
+	/// A closed [CircuitBreaker] means requests should be allowed through
 	Closed,
+	/// An open [CircuitBreaker] means requests should be blocked
 	Open(Instant),
+	/// A half open [CircuitBreaker] means we count requests until we either have
+	/// `Settings.trial_success_required` successful requests, which closes the
+	/// circuit or a single failed request which opens it
 	HalfOpen,
 }
 
@@ -38,6 +47,7 @@ impl std::fmt::Display for State {
 	}
 }
 
+/// The possible settings for our [CircuitBreaker]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settings {
 	/// Specify the capacity of the ring buffer
@@ -50,7 +60,7 @@ pub struct Settings {
 	pub min_eval_size: usize,
 	/// Set the error rate percentage that will trigger the circuit to open
 	pub error_threshold: f32,
-	/// Specify the duration (in seconds) the circuit breaker remains open before
+	/// Specify the duration (in seconds) the [CircuitBreaker] remains open before
 	/// transitioning to half-open
 	pub retry_timeout: Duration,
 	/// Set the number of consecutive successes required to close a half-open
@@ -71,11 +81,12 @@ impl Default for Settings {
 	}
 }
 
+/// The main circuit breaker struct
 #[derive(Debug, PartialEq)]
 pub struct CircuitBreaker {
 	/// The ring buffer for storing failures/successes
 	buffer: RingBuffer,
-	/// The current state of the circuit breaker
+	/// The current state of the [CircuitBreaker]
 	state: State,
 	/// The last time we recorded something. Used for time-based advancement
 	last_record: Instant,
@@ -88,7 +99,7 @@ pub struct CircuitBreaker {
 }
 
 impl CircuitBreaker {
-	/// Create a new circuit breaker with [Settings]
+	/// Create a new [CircuitBreaker] with [Settings]
 	pub fn new(settings: Settings) -> Self {
 		Self {
 			buffer: RingBuffer::new(settings.buffer_size),
