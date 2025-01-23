@@ -4,7 +4,7 @@
 //!  ╚═╝ ╩ ╩╚═ ╚═╝ ╚═╝ ╩  ╩       ╚═╝ ╩╚═ ╚═╝ ╩ ╩ ╩ ╩ ╚═╝ ╩╚═
 //! ```
 //!
-//! A circuit breaker rust implmentation with a ring buffer.
+//! > A zero dependencies, rust, circuit breaker implmentation via a ring buffer.
 //!
 //! The intention is to give a failing system a break so it can recover.
 //!
@@ -52,7 +52,8 @@
 //! }
 //!
 //! fn get_critical_data_from_service() -> Result<(), String> {
-//!     unimplemented!()
+//!     // your request logic here
+//!     Ok(())
 //! }
 //! ```
 
