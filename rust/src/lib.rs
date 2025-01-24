@@ -4,7 +4,8 @@
 //!  ╚═╝ ╩ ╩╚═ ╚═╝ ╚═╝ ╩  ╩       ╚═╝ ╩╚═ ╚═╝ ╩ ╩ ╩ ╩ ╚═╝ ╩╚═
 //! ```
 //!
-//! > A zero dependencies, rust, circuit breaker implmentation via a ring buffer.
+//! > A zero dependencies, rust, circuit breaker implmentation via a ring buffer
+//! with time-based rollover.
 //!
 //! The intention is to give a failing system a break so it can recover.
 //!
@@ -24,6 +25,9 @@
 //!
 //! Checking for the state of the [CircuitBreaker] allows userland to decide
 //! what to do.
+//!
+//! 💡 This implementation is not thread-safe and should be wrapped in a Mutex if
+//! used in a mutli-thread context.
 //!
 //! ```rust
 //! use circuitbreakers::{CircuitBreaker, Settings, State};

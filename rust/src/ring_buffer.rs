@@ -43,6 +43,10 @@ pub struct RingBuffer {
 impl RingBuffer {
 	/// Create a new ring buffer with `elements` [Node]
 	pub fn new(elements: usize) -> Self {
+		if elements == 0 {
+			panic!("You must at least have one buffer node in your ring buffer");
+		}
+
 		Self {
 			cursor: 0,
 			nodes: vec![Node::new(); elements],
@@ -97,7 +101,7 @@ impl RingBuffer {
 
 	/// Retrieve info for a specific node
 	pub fn get_node_info(&self, index: usize) -> NodeInfo {
-		if index > self.nodes.len() {
+		if index >= self.nodes.len() {
 			panic!("Index out of bounds");
 		}
 
@@ -109,6 +113,8 @@ impl RingBuffer {
 
 	/// Returns the error rate as a percentage (0.0 to 100.0)
 	/// If `failures+successes` < `min_eval_size`, returns 0.0
+	///
+	/// Skips nodes with less than min_eval_size and the current node
 	pub fn get_error_rate(&self, min_eval_size: usize) -> f32 {
 		let mut failures = 0;
 		let mut successes = 0;
