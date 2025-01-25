@@ -5,7 +5,7 @@
 //! ```
 //!
 //! > A zero dependencies, rust, circuit breaker implmentation via a ring buffer
-//! with time-based rollover.
+//! > with time-based rollover.
 //!
 //! The intention is to give a failing system a break so it can recover.
 //!
