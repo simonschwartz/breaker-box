@@ -232,6 +232,16 @@ mod test {
 	use crate::ring_buffer::NodeInfo;
 
 	#[test]
+	fn state_fmt_test() {
+		assert_eq!(format!("{}", State::Open(Instant::now())), String::from("\x1b[41m Open \x1b[0m     "));
+		assert_eq!(format!("{:#}", State::Open(Instant::now())), String::from("\x1b[0m─"));
+		assert_eq!(format!("{}", State::Closed), String::from("Closed     "));
+		assert_eq!(format!("{:#}", State::Closed), String::from("│"));
+		assert_eq!(format!("{}", State::HalfOpen), String::from("\x1b[43m Half Open \x1b[0m"));
+		assert_eq!(format!("{:#}", State::HalfOpen), String::from("/"));
+	}
+
+	#[test]
 	fn new_test() {
 		assert_eq!(CircuitBreaker::new(Settings::default()).buffer.get_size(), 5);
 		assert_eq!(CircuitBreaker::new(Settings::default()).settings, Settings::default());
@@ -252,7 +262,6 @@ mod test {
 				retry_timeout: Duration::from_millis(20),
 				buffer_span_duration: Duration::from_millis(999),
 				trial_success_required: 42,
-				..Settings::default()
 			})
 			.settings,
 			Settings {
@@ -732,7 +741,7 @@ mod test {
 	#[test]
 	fn get_buffer_test() {
 		let mut cb = CircuitBreaker::new(Settings::default());
-		assert!(std::ptr::eq(cb.get_buffer(), &mut cb.buffer));
+		assert!(std::ptr::eq(cb.get_buffer(), &cb.buffer));
 	}
 
 	#[test]

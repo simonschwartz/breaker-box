@@ -25,7 +25,6 @@ pub struct Visualizer<'a> {
 impl<'a> Visualizer<'a> {
 	pub fn new(cb: &'a mut CircuitBreaker) -> Self {
 		match cb.get_buffer().get_size() {
-			0 => panic!("Must have at least one buffer enabled"),
 			1 => Self {
 				cb,
 				top: vec![0],
@@ -453,6 +452,15 @@ mod test {
 		assert_eq!(vis.render_buffer_box_top(0), String::from("┏━━━━━━━━━━━━━━━━━┓"));
 		assert_eq!(vis.render_buffer_box_middle(0), String::from("┃ B0  \x1b[42m 003 \x1b[0m \x1b[41m 002 \x1b[0m ┃"));
 		assert_eq!(vis.render_buffer_box_bottom(0), String::from("┗━━━━━━━━━━━━━━━━━┛"));
+	}
+
+	#[test]
+	#[should_panic]
+	fn new_invalid_test() {
+		CircuitBreaker::new(Settings {
+			buffer_size: 0,
+			..Settings::default()
+		});
 	}
 
 	#[test]

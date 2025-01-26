@@ -66,10 +66,6 @@ impl RingBuffer {
 	/// Move the cursor forward by `steps` positions (modulo buffer size),
 	/// resetting any nodes we skip along the way
 	pub fn advance(&mut self, steps: usize) {
-		if self.nodes.is_empty() {
-			return;
-		}
-
 		let size = self.get_size();
 
 		let start = self.cursor + 1;
@@ -143,6 +139,13 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn test_node_default() {
+		let node = Node::default();
+		assert_eq!(node.failure_count, 0);
+		assert_eq!(node.success_count, 0);
+	}
+
+	#[test]
 	fn new_test() {
 		assert_eq!(RingBuffer::new(1).nodes.len(), 1);
 		assert_eq!(RingBuffer::new(1).nodes[0].failure_count, 0);
@@ -151,6 +154,12 @@ mod test {
 		assert_eq!(RingBuffer::new(5).nodes[4].failure_count, 0);
 		assert_eq!(RingBuffer::new(5).nodes[4].success_count, 0);
 		assert_eq!(RingBuffer::new(100).nodes.len(), 100);
+	}
+
+	#[test]
+	#[should_panic]
+	fn new_invalid_test() {
+		RingBuffer::new(0);
 	}
 
 	#[test]
@@ -323,6 +332,30 @@ mod test {
 				success_count: 0,
 			}
 		);
+	}
+
+	#[test]
+	#[should_panic]
+	fn get_node_info_invalid_test() {
+		let buffer = RingBuffer {
+			cursor: 0,
+			nodes: vec![
+				Node {
+					failure_count: 42,
+					success_count: 666,
+				},
+				Node {
+					failure_count: 0,
+					success_count: 42,
+				},
+				Node {
+					failure_count: 256,
+					success_count: 0,
+				},
+			],
+		};
+
+		buffer.get_node_info(3);
 	}
 
 	#[test]

@@ -78,6 +78,7 @@ mod tests {
 				String::from("550"),
 				String::from("--trial_success_required"),
 				String::from("666"),
+				String::from("--unknown"),
 			]),
 			Settings {
 				buffer_size: 42,
@@ -106,6 +107,7 @@ mod tests {
 				String::from("279"),
 				String::from("-t"),
 				String::from("0"),
+				String::from("-x"),
 			]),
 			Settings {
 				buffer_size: 0,

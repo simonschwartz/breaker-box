@@ -10,7 +10,7 @@ fn main() {
 	let args: Vec<String> = env::args().skip(1).collect();
 
 	if args.contains(&String::from("-h")) || args.contains(&String::from("--help")) {
-		cli_helpers::help();
+		println!("{}", cli_helpers::help());
 		return;
 	}
 
