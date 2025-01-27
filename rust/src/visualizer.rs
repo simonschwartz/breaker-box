@@ -62,20 +62,28 @@ impl<'a> Visualizer<'a> {
 				bottom: Some(vec![5, 4, 3]),
 			},
 			length => {
-				let offset = (length - 7) / 2; // safe because we are in a match with length > 6
-				let largest = 6 + offset;
-				let bottom = vec![largest, largest - 1, largest - 2];
+				// safe because we are in a match with length > 6
+				#[allow(clippy::arithmetic_side_effects)]
+				let offset = (length - 7) / 2;
+				let largest = offset.saturating_add(6);
+				let bottom = vec![largest, largest.saturating_sub(1), largest.saturating_sub(2)];
 
-				let mut asc = Vec::with_capacity(length - 3); // safe because we are in a match with length > 6
+				// safe because we are in a match with length > 6
+				#[allow(clippy::arithmetic_side_effects)]
+				let mut asc = Vec::with_capacity(length - 3);
 				for i in 3..length {
 					if !bottom.contains(&i) {
 						asc.push(i);
 					}
 				}
 
+				// also safe due to size > 6
+				#[allow(clippy::arithmetic_side_effects)]
 				let mut middle_buffers = Vec::with_capacity(asc.len() / 2 + 1);
 				let mut small = 0;
-				let mut large = asc.len() - 1; // safe because we are in a match with length > 6
+				// safe because we are in a match with length > 6
+				#[allow(clippy::arithmetic_side_effects)]
+				let mut large = asc.len() - 1;
 
 				while small <= large {
 					let large_val = asc[large];
@@ -85,8 +93,8 @@ impl<'a> Visualizer<'a> {
 					} else {
 						let small_val = asc[small];
 						middle_buffers.push(MiddleBuffer::Two(large_val, small_val));
-						small += 1;
-						large -= 1;
+						small = small.saturating_add(1);
+						large = large.saturating_sub(1);
 					}
 				}
 
@@ -210,7 +218,7 @@ impl<'a> Visualizer<'a> {
 			top[0].push_str(&self.render_buffer_box_top(index));
 			top[1].push_str(&self.render_buffer_box_middle(index));
 			top[2].push_str(&self.render_buffer_box_bottom(index));
-			if index < self.top.len() - 1 {
+			if index < self.top.len().saturating_sub(1) {
 				top[0].push_str("  ");
 				top[1].push_str("─▶");
 				top[2].push_str("  ");
@@ -218,7 +226,7 @@ impl<'a> Visualizer<'a> {
 		}
 
 		if self.top.len() < 3 {
-			let repetition = 3 - self.top.len();
+			let repetition = 3_usize.saturating_sub(self.top.len());
 			match repetition {
 				1 => {
 					top[1].push_str("───────────┐");
@@ -248,7 +256,7 @@ impl<'a> Visualizer<'a> {
 			Some(nodes) => {
 				middle[0].push_str("         ▲                                         │");
 				middle[1].push_str("         │                                         ▼");
-				let mut i = 1;
+				let mut i: usize = 1;
 				for node in nodes {
 					middle.extend([
 						String::new(),
@@ -259,39 +267,39 @@ impl<'a> Visualizer<'a> {
 					]);
 					match node {
 						MiddleBuffer::One(index1) => {
-							middle[i + 1]
+							middle[i.saturating_add(1)]
 								.push_str(&format!("         │                                {}", self.render_buffer_box_top(index1)));
-							middle[i + 2].push_str(&format!(
+							middle[i.saturating_add(2)].push_str(&format!(
 								"         │                                {}",
 								self.render_buffer_box_middle(index1)
 							));
-							middle[i + 3].push_str(&format!(
+							middle[i.saturating_add(3)].push_str(&format!(
 								"         │                                {}",
 								self.render_buffer_box_bottom(index1)
 							));
-							middle[i + 4].push_str("         │                                         │");
-							middle[i + 5].push_str("         │                                         ▼");
-							i += 5;
+							middle[i.saturating_add(4)].push_str("         │                                         │");
+							middle[i.saturating_add(5)].push_str("         │                                         ▼");
+							i = i.saturating_add(5);
 						},
 						MiddleBuffer::Two(index1, index2) => {
-							middle[i + 1].push_str(&format!(
+							middle[i.saturating_add(1)].push_str(&format!(
 								"{}                       {}",
 								self.render_buffer_box_top(index1),
 								self.render_buffer_box_top(index2)
 							));
-							middle[i + 2].push_str(&format!(
+							middle[i.saturating_add(2)].push_str(&format!(
 								"{}                       {}",
 								self.render_buffer_box_middle(index1),
 								self.render_buffer_box_middle(index2)
 							));
-							middle[i + 3].push_str(&format!(
+							middle[i.saturating_add(3)].push_str(&format!(
 								"{}                       {}",
 								self.render_buffer_box_bottom(index1),
 								self.render_buffer_box_bottom(index2)
 							));
-							middle[i + 4].push_str("         ▲                                         │");
-							middle[i + 5].push_str("         │                                         ▼");
-							i += 5;
+							middle[i.saturating_add(4)].push_str("         ▲                                         │");
+							middle[i.saturating_add(5)].push_str("         │                                         ▼");
+							i = i.saturating_add(5);
 						},
 					}
 				}
@@ -303,7 +311,7 @@ impl<'a> Visualizer<'a> {
 			None => {},
 			Some(b) => {
 				if b.len() < 3 {
-					let repetition = 3 - b.len();
+					let repetition = 3_usize.saturating_sub(b.len());
 					bottom[2].push_str(&"                     ".repeat(repetition));
 
 					match repetition {
@@ -324,7 +332,7 @@ impl<'a> Visualizer<'a> {
 					bottom[0].push_str(&self.render_buffer_box_top(*index));
 					bottom[1].push_str(&self.render_buffer_box_middle(*index));
 					bottom[2].push_str(&self.render_buffer_box_bottom(*index));
-					if *index != b[b.len() - 1] {
+					if *index != b[b.len().saturating_sub(1)] {
 						bottom[0].push_str("  ");
 						bottom[1].push_str("◀─");
 						bottom[2].push_str("  ");

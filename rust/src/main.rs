@@ -1,3 +1,6 @@
+#![warn(clippy::arithmetic_side_effects)]
+#![warn(arithmetic_overflow)]
+
 mod circuit_breaker;
 mod cli_args;
 mod cli_helpers;

@@ -61,6 +61,9 @@
 //! }
 //! ```
 
+#![warn(clippy::arithmetic_side_effects)]
+#![warn(arithmetic_overflow)]
+
 pub mod circuit_breaker;
 pub mod ring_buffer;
 

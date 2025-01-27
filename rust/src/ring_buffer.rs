@@ -65,34 +65,39 @@ impl RingBuffer {
 
 	/// Move the cursor forward by `steps` positions (modulo buffer size),
 	/// resetting any nodes we skip along the way
+	// Aloowing modulo with size in this method because size can't be less than 1
+	// or we panic on creation of the buffer in the new method
+	#[allow(clippy::arithmetic_side_effects)]
 	pub fn advance(&mut self, steps: usize) {
 		let size = self.get_size();
 
-		let start = self.cursor + 1;
-		let end = self.cursor + steps + 1;
+		let start = self.cursor.saturating_add(1);
+		let end = self.cursor.saturating_add(steps).saturating_add(1);
 		if steps >= size {
 			for node in &mut self.nodes {
 				node.reset();
 			}
 		} else {
 			for idx in start..end {
+				// size > 0 here so safe to divide with
 				let skip_idx = idx % size;
 				self.nodes[skip_idx].reset();
 			}
 		}
 
-		self.cursor = (self.cursor + steps) % size;
+		// size > 0 here so safe to divide with
+		self.cursor = self.cursor.saturating_add(steps) % size;
 		self.nodes[self.cursor].reset();
 	}
 
 	/// Increments the failure count at the current cursor
 	pub fn add_failure(&mut self) {
-		self.nodes[self.cursor].failure_count += 1;
+		self.nodes[self.cursor].failure_count = self.nodes[self.cursor].failure_count.saturating_add(1);
 	}
 
 	/// Increments the success count at the current cursor
 	pub fn add_success(&mut self) {
-		self.nodes[self.cursor].success_count += 1;
+		self.nodes[self.cursor].success_count = self.nodes[self.cursor].success_count.saturating_add(1);
 	}
 
 	/// Retrieve info for a specific node
@@ -112,24 +117,24 @@ impl RingBuffer {
 	///
 	/// Skips nodes with less than min_eval_size and the current node
 	pub fn get_error_rate(&self, min_eval_size: usize) -> f32 {
-		let mut failures = 0;
-		let mut successes = 0;
+		let mut failures: usize = 0;
+		let mut successes: usize = 0;
 
 		for (i, node) in self.nodes.iter().enumerate() {
 			if i == self.cursor {
 				continue;
 			}
 
-			if node.failure_count + node.success_count != 0 {
-				failures += node.failure_count;
-				successes += node.success_count;
+			if node.failure_count.saturating_add(node.success_count) != 0 {
+				failures = failures.saturating_add(node.failure_count);
+				successes = successes.saturating_add(node.success_count);
 			}
 		}
 
-		if failures + successes < min_eval_size || failures + successes == 0 {
+		if failures.saturating_add(successes) < min_eval_size || failures.saturating_add(successes) == 0 {
 			0.0
 		} else {
-			((failures as f32 / (failures + successes) as f32) * 10_000.0).round() / 100.0
+			((failures as f32 / (failures.saturating_add(successes)) as f32) * 10_000.0).round() / 100.0
 		}
 	}
 }

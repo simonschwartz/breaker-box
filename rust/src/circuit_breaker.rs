@@ -128,7 +128,7 @@ impl CircuitBreaker {
 			return;
 		}
 
-		let spans_elapsed = elapsed.as_nanos() / self.settings.buffer_span_duration.as_nanos();
+		let spans_elapsed = elapsed.as_nanos().checked_div(self.settings.buffer_span_duration.as_nanos()).unwrap_or(0);
 		if spans_elapsed > 0 {
 			self.buffer.advance(spans_elapsed as usize);
 			self.last_record = now;
@@ -147,7 +147,7 @@ impl CircuitBreaker {
 			},
 			State::HalfOpen => {
 				if input.is_ok() {
-					self.trial_success += 1;
+					self.trial_success = self.trial_success.saturating_add(1);
 					self.evaluate_state();
 				} else {
 					self.state = State::Open(Instant::now());
@@ -215,7 +215,7 @@ impl CircuitBreaker {
 	/// Get the elapsed time of our current phase
 	pub fn get_elapsed_time(&self, buffer_span_duration: Duration, now: Instant) -> Duration {
 		let elapsed = now.duration_since(self.start_time);
-		let remainder_ns = elapsed.as_nanos() % buffer_span_duration.as_nanos();
+		let remainder_ns = elapsed.as_nanos().checked_rem(buffer_span_duration.as_nanos()).unwrap_or(u128::MAX);
 		Duration::from_nanos(remainder_ns as u64)
 	}
 }
