@@ -594,6 +594,14 @@ mod test {
 			])
 		);
 		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![9, 8, 7]));
+
+		let mut cb = CircuitBreaker::new(Settings {
+			buffer_size: 666,
+			..Settings::default()
+		});
+		assert_eq!(Visualizer::new(&mut cb).top, vec![0, 1, 2]);
+		assert_eq!(Visualizer::new(&mut cb).middle.unwrap().len(), 330);
+		assert_eq!(Visualizer::new(&mut cb).bottom, Some(vec![335, 334, 333]));
 	}
 
 	#[test]
