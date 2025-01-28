@@ -78,7 +78,7 @@ func (m *MockTime) FastForward(duration time.Duration) {
 	}
 
 	// Internally the circuit breaker sets up functions in goroutines that are triggered by ticks.
-	// There is a very small delay between a tick occurs and the callback function runs because we need to wait for Go to schedule the goroutine
+	// There is a very small delay between a tick occurs and the callback function runs because we need to wait for Go to schedule the goroutine after the tick occurs
 	// To get around this we add a small delay(not ideal) to give the Go runtime a chance to run the goroutine
 	time.Sleep(1 * time.Millisecond)
 }

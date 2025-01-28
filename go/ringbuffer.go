@@ -51,6 +51,14 @@ func (r *RingBuffer) Cursor() *Node {
 	return &r.nodes[r.cursor]
 }
 
+func (r *RingBuffer) GetCursorIndex() int {
+	return r.cursor
+}
+
+func (r *RingBuffer) GetCursorByIndex(index int) *Node {
+	return &r.nodes[index]
+}
+
 func (r *RingBuffer) GetErrorRate(minEvalSize int) float64 {
 	failures := 0
 	total := 0
