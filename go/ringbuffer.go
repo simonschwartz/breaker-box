@@ -1,11 +1,11 @@
 package circuitbreaker
 
 import (
-	"math"
 	"time"
 )
 
 type Node struct {
+	Index        int
 	Expires      time.Time
 	FailureCount int
 	SuccessCount int
@@ -29,9 +29,15 @@ type RingBuffer struct {
 }
 
 func NewRingBuffer(size int) *RingBuffer {
+	nodes := make([]Node, size)
+	for i := range nodes {
+		nodes[i].Clear()
+		nodes[i].Index = i
+	}
+
 	return &RingBuffer{
 		cursor: 0,
-		nodes:  make([]Node, size),
+		nodes:  nodes,
 	}
 }
 
@@ -43,40 +49,26 @@ func (r *RingBuffer) Next() {
 	}
 }
 
-func (r *RingBuffer) Len() int {
-	return len(r.nodes)
-}
-
 func (r *RingBuffer) Cursor() *Node {
 	return &r.nodes[r.cursor]
 }
 
-func (r *RingBuffer) GetCursorIndex() int {
-	return r.cursor
-}
-
-func (r *RingBuffer) GetCursorByIndex(index int) *Node {
-	return &r.nodes[index]
-}
-
-func (r *RingBuffer) GetErrorRate(minEvalSize int) float64 {
-	failures := 0
-	total := 0
-
-	for i, c := range r.nodes {
-		if i == r.cursor {
-			continue
-		}
-		failures += c.FailureCount
-		total += +c.FailureCount + c.SuccessCount
+// Traverse the ring, starting at the active node
+func (r *RingBuffer) Do(f func(*Node)) {
+	for i := r.cursor; i < len(r.nodes); i++ {
+		f(&r.nodes[i])
 	}
 
-	if total < minEvalSize || total == 0 {
-		return 0
+	for i := 0; i < r.cursor; i++ {
+		f(&r.nodes[i])
 	}
+}
 
-	errorRate := (float64(failures) / float64(total)) * 100
-	return math.Round(errorRate*100) / 100
+// Traverse the ring, starting from the head(start)
+func (r *RingBuffer) DoFromHead(f func(*Node)) {
+	for i := 0; i < len(r.nodes); i++ {
+		f(&r.nodes[i])
+	}
 }
 
 func (r *RingBuffer) ClearBuffer() {

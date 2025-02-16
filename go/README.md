@@ -30,6 +30,12 @@ func VeryImportant() (*CriticalData, error) {
 }
 ```
 
+### Reporting and debugging
+
+Use `Inspect()` to inspect the current status and configuration of the circuit breaker. Use `Inspect()` sparingly in production as it traverses the entire buffer to gather data and this data infrequently changes.
+
+TODO - Add pub/sub mechanism for registering handlers when state changes occur
+
 ### Benchmarks
 
 Run benchmarks on the critical circuit breaker methods:

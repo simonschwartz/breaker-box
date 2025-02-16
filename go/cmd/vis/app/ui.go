@@ -75,6 +75,7 @@ type MiddleBuffer = []int
 
 type UI struct {
 	cb         *circuitbreaker.CircuitBreaker
+	cbStatus   *circuitbreaker.Status
 	es         *EventDisplayState
 	retryStart time.Time
 }
@@ -87,7 +88,7 @@ func NewUI(cb *circuitbreaker.CircuitBreaker, es *EventDisplayState) *UI {
 }
 
 func (ui *UI) generateBufferLayout() BufferLayout {
-	buffersLength := ui.cb.UNSAFEGetBufferLength()
+	buffersLength := len(ui.cbStatus.BufferNodes)
 
 	switch buffersLength {
 	case 2:
@@ -177,7 +178,7 @@ func (ui *UI) generateBufferLayout() BufferLayout {
 }
 
 func (ui *UI) renderBufferBoxTop(index int) string {
-	isActive := ui.cb.UNSAFEGetCursorIndex() == index
+	isActive := ui.cbStatus.ActiveNode.Index == index
 	if isActive {
 		return "┏━━━━━━━━━━━━━━━━━┓"
 	}
@@ -185,8 +186,9 @@ func (ui *UI) renderBufferBoxTop(index int) string {
 }
 
 func (ui *UI) renderBufferBoxMiddle(index int) string {
-	isActive := ui.cb.UNSAFEGetCursorIndex() == index
-	cursor := ui.cb.UNSAFEGetCursorByIndex(index)
+	isActive := ui.cbStatus.ActiveNode.Index == index
+	cursor := ui.cbStatus.BufferNodes[index]
+
 	if isActive {
 		return fmt.Sprintf("┃ B%-2d \x1b[42m %03d \x1b[0m \x1b[41m %03d \x1b[0m ┃", index, cursor.SuccessCount, cursor.FailureCount)
 	}
@@ -195,7 +197,7 @@ func (ui *UI) renderBufferBoxMiddle(index int) string {
 }
 
 func (ui *UI) renderBufferBoxBottom(index int) string {
-	isActive := ui.cb.UNSAFEGetCursorIndex() == index
+	isActive := ui.cbStatus.ActiveNode.Index == index
 	if isActive {
 		return "┗━━━━━━━━━━━━━━━━━┛"
 	}
@@ -333,7 +335,9 @@ func (ui *UI) renderEventArrow() string {
 		eventLabel = "   │"
 	}
 
-	switch ui.cb.GetState() {
+	state := ui.cbStatus.State
+
+	switch state {
 	case circuitbreaker.Closed:
 		stateGate = "│"
 	case circuitbreaker.HalfOpen:
@@ -347,7 +351,7 @@ func (ui *UI) renderEventArrow() string {
 	a += fmt.Sprintf("                              %s│\033[0m\n", colour)
 	a += fmt.Sprintf("                              %s%s\033[0m\n", colour, stateGate)
 
-	if ui.cb.GetState() != circuitbreaker.Open {
+	if state != circuitbreaker.Open {
 		a += fmt.Sprintf("                              %s│\033[0m\n", colour)
 		a += fmt.Sprintf("                              %s▼\033[0m\n", colour)
 	} else {
@@ -374,9 +378,11 @@ func (ui *UI) stateToString() string {
 }
 
 func (ui *UI) getRetryTime() float64 {
+	retryTimeout := ui.cbStatus.RetryTimeout
+
 	// Initialize retryStart if not set
 	if ui.retryStart.IsZero() {
-		ui.retryStart = time.Now().Add(ui.cb.UNSAFEGetRetryTimeout())
+		ui.retryStart = time.Now().Add(time.Duration(retryTimeout))
 	}
 
 	// Calculate remaining time
@@ -397,10 +403,12 @@ func (ui *UI) getRetryTime() float64 {
 func (ui *UI) stateIndicator() string {
 	var str string
 
-	cursor := ui.cb.UNSAFEGetActiveCursor()
 	state := ui.cb.GetState()
+	trialSuccesses := ui.cbStatus.TrialSuccesses
+	trialSuccessesRequired := ui.cbStatus.TrialSuccessesRequired
+
+	cursor := ui.cbStatus.ActiveNode
 	cursorExpiresIn := math.Max(0, time.Until(cursor.Expires).Seconds())
-	trialSuccesses, trialSuccessesRequired := ui.cb.UNSAFEGetTrialState()
 
 	switch state {
 	case circuitbreaker.Open:
@@ -415,11 +423,8 @@ func (ui *UI) stateIndicator() string {
 }
 
 func (ui *UI) Render() string {
-	// cursor := ui.cb.UNSAFEGetActiveCursor()
-
-	// state := ui.cb.GetState()
-	errorRate := ui.cb.GetErrorRate()
-	// cursorExpiresIn := math.Max(0, time.Until(cursor.Expires).Seconds())
+	ui.cbStatus = ui.cb.Inspect()
+	errorRate := ui.cbStatus.ErrorRate
 
 	h := `
                        ┌─────────────┐
@@ -427,10 +432,8 @@ func (ui *UI) Render() string {
                        └─────────────┘
 `
 	h += ui.renderEventArrow()
-
 	h += fmt.Sprintf("                         Status: %s", ui.stateToString()) + "\n"
 	h += fmt.Sprintf("                     Error Rate: %.2f%%", errorRate) + "\n"
-	// h += fmt.Sprintf("                    Next Buffer: %.1fs", cursorExpiresIn) + "\n"
 	h += ui.stateIndicator() + "\n"
 	h += ui.renderBufferNodes()
 	return h
