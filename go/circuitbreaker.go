@@ -1,6 +1,7 @@
 package circuitbreaker
 
 import (
+	"math"
 	"sync"
 	"time"
 )
@@ -9,8 +10,8 @@ const (
 	// The window, in minutes, of data to evaluate circuit breaker state
 	DefaultEvalWindow = 10
 
-	// Duration of data each node/span in the buffer stores that make up the overall evaluation window
-	DefaultSpanDuration = time.Minute
+	// Duration of data each node in the buffer stores that make up the overall evaluation window
+	DefaultNodeDuration = time.Minute
 
 	// The minimum amount of events required to evaluate circuit breaker state
 	DefaultMinEvalSize = 100
@@ -46,30 +47,25 @@ type CircuitBreaker struct {
 	buffer    *RingBuffer
 	errorRate float64
 	time      ITime
-
 	// time based scheduler for advancing the ring buffer at regular intervals
 	cursorScheduler *Scheduler
-
 	// schedules the timing for transitioning from Open to HalfOpen state
 	retryScheduler *Scheduler
-
-	// duration of data each node/span in the buffer stores
-	spanDuration time.Duration
-
-	// Minimum number of events required in the buffer to evaluate the error rate
-	minEvalSize int
-
-	// percentage of errors that will cause the circuit to Open
-	errorThreshold float64
-
-	// duration the circuit breaker remains in the Open state before transitioning to HalfOpen.
-	retryTimeout time.Duration
-
-	// how many successive successes required to close a half open circuit
-	trialSuccessesRequired int
-
-	// how many successive successes have occurred while circuit is HalfOpen
+	// how many consecutive successes have occurred while circuit is HalfOpen
 	trialSuccesses int
+	config         Config
+}
+type Config struct {
+	// duration of data each node in the buffer stores
+	NodeDuration time.Duration
+	// minimum number of events required in the buffer to evaluate the error rate
+	MinEvalSize int
+	// percentage of errors that will cause the circuit to Open
+	ErrorThreshold float64
+	// duration the circuit breaker remains in the Open state before transitioning to HalfOpen.
+	RetryTimeout time.Duration
+	// how many successive successes required to close a half open circuit
+	TrialSuccessesRequired int
 }
 
 type Builder struct {
@@ -106,26 +102,26 @@ func (b *Builder) UNSAFESetTime(time ITime) *Builder {
 // Parameters:
 //   - minutes: The total duration of the evaluation window in minutes.
 //     Defaults to 10 minutes if not specified.
-//   - spans: The number of time spans the evaluation window is divided into.
+//   - nodes: The number of nodes the evaluation window is divided into.
 //     This allows for more granular data collection and analysis.
 //
 // The circuit breaker requires data for the full evaluation window before making state decisions.
 //
 // Example: SetEvalWindow(10, 5) creates an evaluation window of 10 minutes
-// divided into 5 spans of 2 minutes each.
-func (b *Builder) SetEvalWindow(minutes int, spans int) *Builder {
+// divided into 5 nodes of 2 minutes each.
+func (b *Builder) SetEvalWindow(minutes int, nodes int) *Builder {
 	if minutes <= 0 {
 		minutes = DefaultEvalWindow
 	}
 
-	if spans <= 0 {
-		b.cb.spanDuration = DefaultSpanDuration
+	if nodes <= 0 {
+		b.cb.config.NodeDuration = DefaultNodeDuration
 		b.cb.buffer = NewRingBuffer(minutes + 1)
 		return b
 	}
 
-	b.cb.spanDuration = time.Duration(float64(minutes) / float64(spans) * float64(time.Minute))
-	b.cb.buffer = NewRingBuffer(spans + 1)
+	b.cb.config.NodeDuration = time.Duration(float64(minutes) / float64(nodes) * float64(time.Minute))
+	b.cb.buffer = NewRingBuffer(nodes + 1)
 
 	return b
 }
@@ -135,7 +131,7 @@ func (b *Builder) SetEvalWindow(minutes int, spans int) *Builder {
 //
 // If not set, the defaults is 100 events.
 func (b *Builder) SetMinEvalSize(size int) *Builder {
-	b.cb.minEvalSize = size
+	b.cb.config.MinEvalSize = size
 	return b
 }
 
@@ -145,7 +141,7 @@ func (b *Builder) SetMinEvalSize(size int) *Builder {
 //
 // If not set, the default threshold is 10.0 (10%)
 func (b *Builder) SetErrorThreshold(threshold float64) *Builder {
-	b.cb.errorThreshold = threshold
+	b.cb.config.ErrorThreshold = threshold
 	return b
 }
 
@@ -159,7 +155,7 @@ func (b *Builder) SetErrorThreshold(threshold float64) *Builder {
 //
 // If not set, the default in time.Minute (1 minute)
 func (b *Builder) SetRetryTimeout(duration time.Duration) *Builder {
-	b.cb.retryTimeout = duration
+	b.cb.config.RetryTimeout = duration
 	return b
 }
 
@@ -174,13 +170,13 @@ func (b *Builder) SetRetryTimeout(duration time.Duration) *Builder {
 //
 // If not set, the default is 20 successful requests
 func (b *Builder) SetTrialSuccessesRequired(number int) *Builder {
-	b.cb.trialSuccessesRequired = number
+	b.cb.config.TrialSuccessesRequired = number
 	return b
 }
 
 func (b *Builder) Build() *CircuitBreaker {
-	b.cb.cursorScheduler = NewScheduler(b.cb.time, b.cb.spanDuration, b.cb.moveCursor)
-	b.cb.retryScheduler = NewScheduler(b.cb.time, b.cb.retryTimeout, func() {
+	b.cb.cursorScheduler = NewScheduler(b.cb.time, b.cb.config.NodeDuration, b.cb.moveCursor)
+	b.cb.retryScheduler = NewScheduler(b.cb.time, b.cb.config.RetryTimeout, func() {
 		b.cb.mu.Lock()
 		defer b.cb.mu.Unlock()
 
@@ -189,7 +185,7 @@ func (b *Builder) Build() *CircuitBreaker {
 	})
 
 	b.cb.cursorScheduler.Start()
-	b.cb.buffer.Cursor().Reset(b.cb.time.Now().Add(b.cb.spanDuration))
+	b.cb.buffer.Cursor().Reset(b.cb.time.Now().Add(b.cb.config.NodeDuration))
 
 	return b.cb
 }
@@ -197,15 +193,17 @@ func (b *Builder) Build() *CircuitBreaker {
 func New() *Builder {
 	return &Builder{
 		cb: &CircuitBreaker{
-			state:                  Closed,
-			buffer:                 NewRingBuffer(DefaultEvalWindow + 1),
-			errorRate:              0.00,
-			spanDuration:           DefaultSpanDuration,
-			time:                   &Time{},
-			minEvalSize:            DefaultMinEvalSize,
-			errorThreshold:         DefaultErrorThreshold,
-			trialSuccessesRequired: DefaultTrialSuccessesRequired,
-			retryTimeout:           DefaultRetryTimeout,
+			state:     Closed,
+			buffer:    NewRingBuffer(DefaultEvalWindow + 1),
+			errorRate: 0.00,
+			time:      &Time{},
+			config: Config{
+				NodeDuration:           DefaultNodeDuration,
+				MinEvalSize:            DefaultMinEvalSize,
+				ErrorThreshold:         DefaultErrorThreshold,
+				TrialSuccessesRequired: DefaultTrialSuccessesRequired,
+				RetryTimeout:           DefaultRetryTimeout,
+			},
 		},
 	}
 }
@@ -215,10 +213,10 @@ func (cb *CircuitBreaker) moveCursor() {
 	defer cb.mu.Unlock()
 
 	cb.buffer.Next()
-	cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
-	cb.errorRate = cb.buffer.GetErrorRate(cb.minEvalSize)
+	cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.config.NodeDuration))
+	cb.errorRate = cb.calculateErrorRate(cb.config.MinEvalSize)
 
-	if cb.state == Closed && cb.errorRate > cb.errorThreshold {
+	if cb.state == Closed && cb.errorRate > cb.config.ErrorThreshold {
 		cb.state = Open
 		cb.buffer.ClearBuffer()
 		cb.errorRate = 0.00
@@ -246,11 +244,11 @@ func (cb *CircuitBreaker) Record(result Result) {
 	// If 20 consecutive successes occur, assume the service is OK and set the circuit to Closed
 	if cb.state == HalfOpen && result == Success {
 		cb.trialSuccesses++
-		if cb.trialSuccesses >= cb.trialSuccessesRequired {
+		if cb.trialSuccesses >= cb.config.TrialSuccessesRequired {
 			cb.state = Closed
 			cb.trialSuccesses = 0
 			cb.cursorScheduler.Start()
-			cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.spanDuration))
+			cb.buffer.Cursor().Reset(cb.time.Now().Add(cb.config.NodeDuration))
 		}
 		return
 	}
@@ -271,38 +269,63 @@ func (cb *CircuitBreaker) Record(result Result) {
 	}
 }
 
-func (cb *CircuitBreaker) GetErrorRate() float64 {
+func (cb *CircuitBreaker) calculateErrorRate(minEvalSize int) float64 {
+	failures := 0
+	total := 0
+	skippedActiveNode := false
+
+	cb.buffer.Do(func(node *Node) {
+		if !skippedActiveNode {
+			skippedActiveNode = true
+			return
+		}
+		failures += node.FailureCount
+		total += +node.FailureCount + node.SuccessCount
+	})
+
+	if total < minEvalSize || total == 0 {
+		return 0
+	}
+
+	errorRate := (float64(failures) / float64(total)) * 100
+	return math.Round(errorRate*100) / 100
+}
+
+type Status struct {
+	State          State
+	ErrorRate      float64
+	TrialSuccesses int
+	BufferNodes    []Node
+	ActiveNode     Node
+	Config
+}
+
+// Inspect the current state and config of the circuit breaker for reporting or debugging
+func (cb *CircuitBreaker) Inspect() *Status {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 
-	return cb.errorRate
-}
+	var bufferNodes []Node
 
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetActiveCursor() *Node {
-	return cb.buffer.Cursor()
-}
+	cb.buffer.DoFromHead(func(node *Node) {
+		bufferNodes = append(bufferNodes, *node)
+	})
 
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetBufferLength() int {
-	return cb.buffer.Len()
-}
-
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetCursorIndex() int {
-	return cb.buffer.GetCursorIndex()
-}
-
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetCursorByIndex(index int) *Node {
-	return cb.buffer.GetCursorByIndex(index)
-}
-
-// UNSAFE - only intended for use by internal testing tools
-func (cb *CircuitBreaker) UNSAFEGetTrialState() (int, int) {
-	return cb.trialSuccesses, cb.trialSuccessesRequired
-}
-
-func (cb *CircuitBreaker) UNSAFEGetRetryTimeout() time.Duration {
-	return cb.retryTimeout
+	return &Status{
+		// 0 = Open, 1 = HalfOpen, 2 = Closed
+		State:     cb.state,
+		ErrorRate: cb.errorRate,
+		// Current state of data in each buffer node
+		BufferNodes: bufferNodes,
+		ActiveNode:  *cb.buffer.Cursor(),
+		// Number of consecutive successful requests. Will only have a value when the circuit breaker is in HalfOpen state
+		TrialSuccesses: cb.trialSuccesses,
+		Config: Config{
+			NodeDuration:           cb.config.NodeDuration,
+			MinEvalSize:            cb.config.MinEvalSize,
+			ErrorThreshold:         cb.config.ErrorThreshold,
+			TrialSuccessesRequired: cb.config.TrialSuccessesRequired,
+			RetryTimeout:           cb.config.RetryTimeout,
+		},
+	}
 }

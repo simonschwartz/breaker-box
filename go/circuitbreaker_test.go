@@ -117,9 +117,6 @@ func TestCircuitBreaker(t *testing.T) {
 		SetErrorThreshold(10.0).
 		Build()
 
-	var rate float64
-	var state circuitbreaker.State
-
 	// First - fill the buffer with events
 	fillBuffer := []struct {
 		errors    int
@@ -153,11 +150,10 @@ func TestCircuitBreaker(t *testing.T) {
 		RecordSuccesses(s.successes, cb)
 	}
 
-	rate = cb.GetErrorRate()
-	state = cb.GetState()
+	status := cb.Inspect()
 
-	assert(t, rate, 4.12)
-	assert(t, circuitbreaker.Closed, state)
+	assert(t, status.ErrorRate, 4.12)
+	assert(t, circuitbreaker.Closed, status.State)
 
 	// Second - simulate a spike in errors to Open the circuit
 	RecordErrors(250, cb)
@@ -165,36 +161,35 @@ func TestCircuitBreaker(t *testing.T) {
 	mockTime.FastForward(61 * time.Second)
 	RecordErrors(1, cb)
 
-	rate = cb.GetErrorRate()
-	state = cb.GetState()
+	status = cb.Inspect()
 
-	assert(t, circuitbreaker.Open, state)
-	assert(t, rate, 0.0)
+	assert(t, circuitbreaker.Open, status.State)
+	assert(t, status.ErrorRate, 0.0)
 
 	// Third - wait 1 minute for the circuit to move to HalfOpen
 	mockTime.FastForward(61 * time.Second)
 	RecordSuccesses(1, cb)
 
-	state = cb.GetState()
-	assert(t, circuitbreaker.HalfOpen, state)
+	status = cb.Inspect()
+	assert(t, circuitbreaker.HalfOpen, status.State)
 
 	// Fourth - oh no, an error, the circuit goes back to Open
 	RecordErrors(1, cb)
 
-	state = cb.GetState()
-	assert(t, circuitbreaker.Open, state)
+	status = cb.Inspect()
+	assert(t, circuitbreaker.Open, status.State)
 
 	// Fifth - wait 1 minute for the circuit to move to HalfOpen
 	mockTime.FastForward(61 * time.Second)
 
-	state = cb.GetState()
+	status = cb.Inspect()
 
-	assert(t, circuitbreaker.HalfOpen, state)
+	assert(t, circuitbreaker.HalfOpen, status.State)
 
 	RecordSuccesses(20, cb)
 
-	state = cb.GetState()
-	assert(t, circuitbreaker.Closed, state)
+	status = cb.Inspect()
+	assert(t, circuitbreaker.Closed, status.State)
 }
 
 // Record() is the most frequently used method in the Circuit Breaker
