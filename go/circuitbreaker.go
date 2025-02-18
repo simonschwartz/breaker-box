@@ -4,6 +4,9 @@ import (
 	"math"
 	"sync"
 	"time"
+
+	"circuitbreaker/internal/ringbuffer"
+	"circuitbreaker/internal/scheduler"
 )
 
 const (
@@ -41,16 +44,45 @@ const (
 	Failure Result = iota
 )
 
+type BufferNode struct {
+	Index        int
+	Expires      time.Time
+	FailureCount int
+	SuccessCount int
+}
+
+type Status struct {
+	State          State
+	ErrorRate      float64
+	TrialSuccesses int
+	BufferNodes    []*BufferNode
+	ActiveNode     *BufferNode
+	Config
+}
+
+func (n *BufferNode) Init(index int) {
+	n.Index = index
+	n.Expires = time.Time{}
+	n.FailureCount = 0
+	n.SuccessCount = 0
+}
+
+func (n *BufferNode) Reset(expires time.Time) {
+	n.Expires = expires
+	n.FailureCount = 0
+	n.SuccessCount = 0
+}
+
 type CircuitBreaker struct {
 	mu        sync.RWMutex
 	state     State
-	buffer    *RingBuffer
+	buffer    *ringbuffer.RingBuffer[BufferNode]
 	errorRate float64
 	time      ITime
 	// time based scheduler for advancing the ring buffer at regular intervals
-	cursorScheduler *Scheduler
+	cursorScheduler *scheduler.Scheduler
 	// schedules the timing for transitioning from Open to HalfOpen state
-	retryScheduler *Scheduler
+	retryScheduler *scheduler.Scheduler
 	// how many consecutive successes have occurred while circuit is HalfOpen
 	trialSuccesses int
 	config         Config
@@ -116,12 +148,12 @@ func (b *Builder) SetEvalWindow(minutes int, nodes int) *Builder {
 
 	if nodes <= 0 {
 		b.cb.config.NodeDuration = DefaultNodeDuration
-		b.cb.buffer = NewRingBuffer(minutes + 1)
+		b.cb.buffer = ringbuffer.New[BufferNode](minutes + 1)
 		return b
 	}
 
 	b.cb.config.NodeDuration = time.Duration(float64(minutes) / float64(nodes) * float64(time.Minute))
-	b.cb.buffer = NewRingBuffer(nodes + 1)
+	b.cb.buffer = ringbuffer.New[BufferNode](nodes + 1)
 
 	return b
 }
@@ -175,8 +207,8 @@ func (b *Builder) SetTrialSuccessesRequired(number int) *Builder {
 }
 
 func (b *Builder) Build() *CircuitBreaker {
-	b.cb.cursorScheduler = NewScheduler(b.cb.time, b.cb.config.NodeDuration, b.cb.moveCursor)
-	b.cb.retryScheduler = NewScheduler(b.cb.time, b.cb.config.RetryTimeout, func() {
+	b.cb.cursorScheduler = scheduler.New(b.cb.time, b.cb.config.NodeDuration, b.cb.moveCursor)
+	b.cb.retryScheduler = scheduler.New(b.cb.time, b.cb.config.RetryTimeout, func() {
 		b.cb.mu.Lock()
 		defer b.cb.mu.Unlock()
 
@@ -185,6 +217,7 @@ func (b *Builder) Build() *CircuitBreaker {
 	})
 
 	b.cb.cursorScheduler.Start()
+	b.cb.initBuffer()
 	b.cb.buffer.Cursor().Reset(b.cb.time.Now().Add(b.cb.config.NodeDuration))
 
 	return b.cb
@@ -194,7 +227,7 @@ func New() *Builder {
 	return &Builder{
 		cb: &CircuitBreaker{
 			state:     Closed,
-			buffer:    NewRingBuffer(DefaultEvalWindow + 1),
+			buffer:    ringbuffer.New[BufferNode](DefaultEvalWindow + 1),
 			errorRate: 0.00,
 			time:      &Time{},
 			config: Config{
@@ -218,11 +251,33 @@ func (cb *CircuitBreaker) moveCursor() {
 
 	if cb.state == Closed && cb.errorRate > cb.config.ErrorThreshold {
 		cb.state = Open
-		cb.buffer.ClearBuffer()
+		cb.clearBuffer()
 		cb.errorRate = 0.00
 		cb.cursorScheduler.Stop()
 		cb.retryScheduler.Start()
 	}
+}
+
+// When starting the circuit breaker we must initialise each node in the buffer with default values
+func (cb *CircuitBreaker) initBuffer() {
+	index := 0
+
+	cb.buffer.DoFromHead(func(node *BufferNode) {
+		node.Index = index
+		node.Expires = time.Time{}
+		node.FailureCount = 0
+		node.SuccessCount = 0
+
+		index++
+	})
+}
+
+func (cb *CircuitBreaker) clearBuffer() {
+	cb.buffer.Do(func(node *BufferNode) {
+		node.Expires = time.Time{}
+		node.FailureCount = 0
+		node.SuccessCount = 0
+	})
 }
 
 func (cb *CircuitBreaker) GetState() State {
@@ -274,7 +329,7 @@ func (cb *CircuitBreaker) calculateErrorRate(minEvalSize int) float64 {
 	total := 0
 	skippedActiveNode := false
 
-	cb.buffer.Do(func(node *Node) {
+	cb.buffer.Do(func(node *BufferNode) {
 		if !skippedActiveNode {
 			skippedActiveNode = true
 			return
@@ -291,24 +346,15 @@ func (cb *CircuitBreaker) calculateErrorRate(minEvalSize int) float64 {
 	return math.Round(errorRate*100) / 100
 }
 
-type Status struct {
-	State          State
-	ErrorRate      float64
-	TrialSuccesses int
-	BufferNodes    []Node
-	ActiveNode     Node
-	Config
-}
-
 // Inspect the current state and config of the circuit breaker for reporting or debugging
 func (cb *CircuitBreaker) Inspect() *Status {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 
-	var bufferNodes []Node
+	var bufferNodes []*BufferNode
 
-	cb.buffer.DoFromHead(func(node *Node) {
-		bufferNodes = append(bufferNodes, *node)
+	cb.buffer.DoFromHead(func(node *BufferNode) {
+		bufferNodes = append(bufferNodes, node)
 	})
 
 	return &Status{
@@ -317,7 +363,7 @@ func (cb *CircuitBreaker) Inspect() *Status {
 		ErrorRate: cb.errorRate,
 		// Current state of data in each buffer node
 		BufferNodes: bufferNodes,
-		ActiveNode:  *cb.buffer.Cursor(),
+		ActiveNode:  cb.buffer.Cursor(),
 		// Number of consecutive successful requests. Will only have a value when the circuit breaker is in HalfOpen state
 		TrialSuccesses: cb.trialSuccesses,
 		Config: Config{
