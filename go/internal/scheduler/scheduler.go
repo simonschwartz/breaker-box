@@ -1,4 +1,4 @@
-package circuitbreaker
+package scheduler
 
 import (
 	"sync"
@@ -19,7 +19,7 @@ type Scheduler struct {
 }
 
 // Schedule a callback function to be executed at specified intervals
-func NewScheduler(time TimeTicker, duration time.Duration, callback func()) *Scheduler {
+func New(time TimeTicker, duration time.Duration, callback func()) *Scheduler {
 	return &Scheduler{
 		duration: duration,
 		callback: callback,
